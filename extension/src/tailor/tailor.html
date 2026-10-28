@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tailor Resume · Jobu</title>
+  <link rel="stylesheet" href="../shared/ui.css">
+  <link rel="stylesheet" href="tailor.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand"><span class="logo">J</span>Jobu</div>
+    <div class="job-line"><span class="muted">Tailoring for</span> <a id="job-link" target="_blank" rel="noopener"></a></div>
+  </header>
+
+  <main>
+    <p id="status" class="status" role="status">Reading your resume…</p>
+
+    <section id="need-resume" class="card notice" hidden>
+      <h2>Add your resume first</h2>
+      <p class="muted">Jobu tailors the resume in your profile. Upload it there, then press “Tailor my resume” again.</p>
+      <button id="open-profile" class="btn primary">Open my Jobu profile</button>
+    </section>
+
+    <section id="need-jd" class="card notice" hidden>
+      <h2>Paste the job description</h2>
+      <p class="muted">Jobu couldn’t find the job description on that page. Copy it from the posting and paste it here.</p>
+      <textarea id="jd-paste" rows="10" placeholder="Responsibilities, requirements, nice-to-haves…"></textarea>
+      <button id="jd-go" class="btn primary">Tailor my resume</button>
+    </section>
+
+    <div id="layout" class="layout" hidden>
+      <aside class="side">
+        <section class="card">
+          <h2>Keyword match</h2>
+          <div class="meter"><span>Your resume</span><div class="bar"><i id="bar-before"></i></div><b id="score-before"></b></div>
+          <div class="meter after"><span>Tailored</span><div class="bar"><i id="bar-after"></i></div><b id="score-after"></b></div>
+          <p class="muted small">How much of what the job asks for your resume shows. Required skills count most.</p>
+        </section>
+
+        <section class="card">
+          <h2>Keywords from the job</h2>
+          <div id="chips-have" class="chips"></div>
+          <h3 id="missing-title">Not on your resume</h3>
+          <p id="missing-help" class="muted small">Add only the ones you really have. Jobu puts them in your skills.</p>
+          <div id="chips-missing" class="chips"></div>
+          <div id="chips-soft-wrap" hidden>
+            <h3>Soft skills it mentions</h3>
+            <p class="muted small">Show these in your bullets rather than your skills list.</p>
+            <div id="chips-soft" class="chips"></div>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>What Jobu changed</h2>
+          <ul id="changes" class="changes"></ul>
+          <button id="reset" class="link-btn" hidden>Undo my edits</button>
+        </section>
+
+        <section class="card ai">
+          <h2>Rewrite with Claude <span class="pill">optional</span></h2>
+          <p class="muted small">Claude rewrites your summary and bullets in the job’s words. It only rephrases what’s on your resume, and Jobu keeps your original wherever a rewrite adds a number or skill you don’t have. This sends your resume and the job description to Anthropic, using your own API key.</p>
+          <form id="ai-key" class="ai-key" hidden>
+            <label class="field"><span class="label">Anthropic API key</span><input id="key" type="password" autocomplete="off" placeholder="sk-ant-…" required></label>
+            <label class="check small"><input id="remember" type="checkbox" checked> Remember it on this computer</label>
+            <button class="btn primary">Rewrite with Claude</button>
+          </form>
+          <div id="ai-ready" class="ai-ready" hidden>
+            <button id="ai-run" class="btn primary">Rewrite with Claude</button>
+            <button id="ai-forget" class="link-btn">Forget my API key</button>
+          </div>
+          <button id="ai-undo" class="link-btn" hidden>Undo Claude’s changes</button>
+          <p id="ai-msg" class="small" role="status"></p>
+        </section>
+
+        <details class="card jd">
+          <summary>Job description</summary>
+          <textarea id="jd" rows="12"></textarea>
+          <button id="jd-again" class="btn">Score again</button>
+        </details>
+      </aside>
+
+      <section class="doc">
+        <div class="doc-actions">
+          <button id="attach" class="btn primary" hidden>📎 Use for this application</button>
+          <button id="save" class="btn">Save to Jobu</button>
+          <button id="download" class="btn">Download PDF</button>
+        </div>
+        <p id="doc-msg" class="small muted" role="status">Click any text to edit it. The PDF says exactly what you see here.</p>
+        <article id="sheet" class="sheet" aria-label="Tailored resume"></article>
+      </section>
+    </div>
+  </main>
+
+  <script src="../shared/schema.js"></script>
+  <script src="../shared/results.js"></script>
+  <script src="../options/resume-parse.js"></script>
+  <script src="resume-model.js"></script>
+  <script type="module" src="tailor.js"></script>
+</body>
+</html>

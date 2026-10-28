@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jobu Profile</title>
+  <link rel="stylesheet" href="../shared/ui.css">
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand"><span class="logo">J</span>Jobu</div>
+    <div class="top-right">
+      <span id="saved" class="muted" role="status"></span>
+      <span id="completeness" class="pill"></span>
+    </div>
+  </header>
+
+  <main>
+    <p class="intro muted">Jobu fills job applications from this profile. Everything stays in your browser. Nothing is sent anywhere unless you ask Claude to rewrite a tailored resume. Changes save automatically.</p>
+
+    <section class="card">
+      <h2>Resume &amp; cover letter</h2>
+      <p class="muted">Start here. Upload your resume and Jobu fills in the profile below with your name, contact details, links, location, current job and education. Your resume is read on this computer.</p>
+      <div class="grid">
+        <div class="file-field" data-key="resume">
+          <span class="label">Resume (PDF, DOCX or TXT)</span>
+          <div class="file-box">
+            <span class="file-name muted">Drop your resume here, or upload it</span>
+            <label class="btn">Upload<input type="file" accept=".pdf,.doc,.docx,.txt,.rtf" hidden></label>
+            <button class="btn remove" hidden>Remove</button>
+          </div>
+          <button id="reparse" class="link-btn" type="button" hidden>Fill my profile from this resume again</button>
+        </div>
+        <div class="file-field" data-key="coverLetterFile">
+          <span class="label">Cover letter file (optional)</span>
+          <div class="file-box">
+            <span class="file-name muted">No file uploaded</span>
+            <label class="btn">Upload<input type="file" accept=".pdf,.doc,.docx,.txt,.rtf" hidden></label>
+            <button class="btn remove" hidden>Remove</button>
+          </div>
+        </div>
+      </div>
+      <div id="resume-import" class="import-note" role="status" hidden>
+        <span class="text"></span>
+        <button type="button" class="btn" hidden></button>
+      </div>
+    </section>
+
+    <div id="sections"></div>
+
+    <section class="card">
+      <h2>Saved answers</h2>
+      <p class="muted">Answers to company-specific questions. Jobu fills a field when its question closely matches one below. Use “Remember my answers” in the Jobu panel to add them as you apply.</p>
+      <div id="answers"></div>
+      <button id="add-answer" class="btn">+ Add answer</button>
+    </section>
+
+    <section class="card" id="passwords">
+      <h2>Saved passwords</h2>
+      <p class="muted">Many job sites (Workday, iCIMS, Taleo) make you create an account to apply. On those pages, the Jobu panel makes a strong password, fills it in and saves it here, one per site, and fills it in again when you sign in. Passwords are encrypted with a passphrase you choose and never leave this computer. They lock when you close the browser.</p>
+      <form class="vault-setup" hidden>
+        <div class="grid">
+          <label class="field"><span class="label">Choose a passphrase</span><input type="password" name="pass" autocomplete="new-password" required></label>
+          <label class="field"><span class="label">Type it again</span><input type="password" name="again" autocomplete="new-password" required></label>
+        </div>
+        <p class="muted small">Use at least 8 characters. Jobu can't recover your saved passwords if you forget it.</p>
+        <button class="btn primary">Turn on saved passwords</button>
+      </form>
+      <form class="vault-unlock" hidden>
+        <div class="row">
+          <label class="field grow"><span class="label">Passphrase</span><input type="password" name="pass" autocomplete="current-password" required></label>
+          <button class="btn primary">Unlock</button>
+        </div>
+        <button type="button" class="link-btn" data-vault="reset">Forgot it? Delete all saved passwords</button>
+      </form>
+      <div class="vault-open" hidden>
+        <div class="vault-list"></div>
+        <p class="muted small vault-empty">No saved passwords yet. They show up here when you create an account with the Jobu panel.</p>
+        <details class="vault-more">
+          <summary>Add a password you already have</summary>
+          <form class="vault-add grid">
+            <label class="field"><span class="label">Site</span><input name="site" placeholder="globex.wd5.myworkdayjobs.com" required></label>
+            <label class="field"><span class="label">Email or username</span><input name="username" autocomplete="off"></label>
+            <label class="field"><span class="label">Password</span><input type="password" name="password" autocomplete="new-password" required></label>
+            <div class="field end"><button class="btn primary">Save password</button></div>
+          </form>
+        </details>
+        <details class="vault-more">
+          <summary>Change passphrase</summary>
+          <form class="vault-change grid">
+            <label class="field"><span class="label">New passphrase</span><input type="password" name="pass" autocomplete="new-password" required></label>
+            <label class="field"><span class="label">Type it again</span><input type="password" name="again" autocomplete="new-password" required></label>
+            <div class="field end"><button class="btn">Change passphrase</button></div>
+          </form>
+        </details>
+        <div class="actions"><button class="btn" data-vault="lock">Lock now</button></div>
+      </div>
+      <p class="vault-msg small" role="status"></p>
+    </section>
+
+    <section class="card">
+      <h2>Settings</h2>
+      <label class="check"><input type="checkbox" data-setting="showButton"> Show the floating Jobu button on application forms</label>
+      <label class="check"><input type="checkbox" data-setting="highlight"> Highlight filled fields (green) and fields Jobu left empty (amber: solid if required, dashed if optional)</label>
+      <label class="check"><input type="checkbox" data-setting="overwrite"> Overwrite values already in the form</label>
+      <label class="check"><input type="checkbox" data-setting="autofillOnNext"> Autofill each new page after Jobu clicks Next</label>
+      <label class="check"><input type="checkbox" data-setting="confirmSubmit"> Ask me to confirm before Jobu submits an application</label>
+      <p class="muted">Shortcuts: <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd> autofills the page, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd> goes to the next page, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>J</kbd> opens the Jobu panel, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd> goes to the next field Jobu left empty. Submit has no default key. Set one, or change the others, at chrome://extensions/shortcuts.</p>
+    </section>
+
+    <section class="card">
+      <h2>Backup</h2>
+      <div class="actions">
+        <button id="export" class="btn">Export profile</button>
+        <label class="btn">Import profile<input id="import" type="file" accept="application/json" hidden></label>
+      </div>
+    </section>
+  </main>
+
+  <script src="../shared/schema.js"></script>
+  <script src="../content/classifier.js"></script>
+  <script src="resume-parse.js"></script>
+  <script src="options.js"></script>
+  <script src="../shared/vault.js"></script>
+  <script src="passwords.js"></script>
+</body>
+</html>

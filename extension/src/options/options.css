@@ -1,0 +1,57 @@
+.top { position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between; align-items: center; padding: 14px 24px; background: var(--bg); border-bottom: 1px solid var(--line); }
+.top-right { display: flex; gap: 12px; align-items: center; }
+main { max-width: 860px; margin: 0 auto; padding: 16px; }
+.intro { margin: 8px 0 16px; }
+.card { border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; margin-bottom: 16px; background: var(--panel); }
+.card h2 { font-size: 16px; margin: 0 0 12px; }
+.card > p { margin: 0 0 12px; font-size: 13px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px 16px; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field.wide { grid-column: 1 / -1; }
+.label { font-size: 12px; font-weight: 600; color: var(--muted); }
+.label .req { color: var(--danger); }
+textarea { min-height: 120px; resize: vertical; }
+.file-field { display: flex; flex-direction: column; gap: 4px; }
+.file-box { display: flex; align-items: center; gap: 8px; border: 1px dashed var(--line); border-radius: 10px; padding: 8px 10px; background: var(--bg); }
+.file-box .file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-box .btn { padding: 5px 10px; font-size: 13px; }
+.file-box.over { border-color: var(--brand); background: var(--brand-soft); }
+.link-btn { align-self: flex-start; border: 0; background: none; padding: 2px 0; color: var(--brand); font: inherit; font-size: 13px; cursor: pointer; }
+.link-btn:hover { text-decoration: underline; }
+.import-note { display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 10px 12px; border: 1px solid var(--line); border-left: 3px solid var(--brand); border-radius: 10px; font-size: 13px; background: var(--bg); }
+.import-note[hidden] { display: none; }
+.import-note.ok { border-left-color: var(--ok); }
+.import-note.warn { border-left-color: var(--warn); }
+.import-note .text { flex: 1; }
+.import-note .btn { padding: 5px 10px; font-size: 13px; white-space: nowrap; }
+.small { font-size: 12px; }
+.row { display: flex; gap: 12px; align-items: flex-end; }
+.grow { flex: 1; }
+.field.end { justify-content: flex-end; }
+.vault-msg:empty { display: none; }
+.vault-msg.ok { color: var(--ok); }
+.vault-msg.warn { color: var(--danger); }
+.vault-unlock .link-btn { margin-top: 8px; }
+.vault-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.vault-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+.vault-row .site { font-weight: 600; overflow-wrap: anywhere; }
+.vault-row .secret { font-size: 12px; overflow-wrap: anywhere; }
+.row-actions { display: flex; gap: 10px; }
+.link-btn.danger { color: var(--danger); }
+.vault-more { margin: 10px 0; }
+.vault-more summary { cursor: pointer; font-size: 13px; color: var(--brand); }
+.vault-more form { margin-top: 10px; }
+@media (max-width: 600px) { .vault-row { grid-template-columns: 1fr; } .row { flex-direction: column; align-items: stretch; } }
+.field.from-resume input, .field.from-resume select { border-color: var(--brand); background: var(--brand-soft); }
+.field.from-resume .label::after { content: 'from resume'; margin-left: 6px; padding: 0 6px; border-radius: 999px; font-size: 10px; font-weight: 600; color: var(--brand); background: var(--brand-soft); }
+.answer { display: grid; grid-template-columns: 1fr 1.4fr auto; gap: 8px; margin-bottom: 8px; align-items: start; }
+.answer textarea { min-height: 38px; }
+.answer .del { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 8px 4px; }
+.answer .del:hover { color: var(--danger); }
+.check { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+kbd { border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; font-size: 12px; background: var(--bg); }
+@media (max-width: 600px) {
+  .answer { grid-template-columns: 1fr auto; }
+  .answer textarea { grid-column: 1 / 2; }
+}

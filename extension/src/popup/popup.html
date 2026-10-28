@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Jobu</title>
+  <link rel="stylesheet" href="../shared/ui.css">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <div class="brand"><span class="logo">J</span>Jobu</div>
+    <button id="settings" class="icon" title="Edit profile">⚙</button>
+  </header>
+
+  <section id="profile-card" class="card">
+    <div class="row">
+      <span>Profile</span>
+      <span id="completeness" class="pill">0%</span>
+    </div>
+    <div class="bar"><div id="bar-fill"></div></div>
+    <p id="profile-hint" class="muted small"></p>
+  </section>
+
+  <section class="card">
+    <div class="row">
+      <strong id="job-title" class="ellipsis">This page</strong>
+      <span id="ats" class="pill" hidden></span>
+    </div>
+    <div id="job-company" class="muted small ellipsis"></div>
+    <div id="scan" class="scan small" hidden></div>
+    <div class="actions">
+      <button id="autofill" class="btn primary">Autofill this page</button>
+      <button id="save" class="btn">Save job</button>
+    </div>
+    <div class="actions">
+      <button id="next" class="btn grow">Next page →</button>
+      <button id="submit" class="btn grow">Submit…</button>
+    </div>
+    <div class="actions">
+      <button id="flow" class="btn grow">Fill all pages</button>
+      <button id="panel" class="btn grow">Open panel</button>
+    </div>
+    <div class="actions">
+      <button id="attach" class="btn grow">📎 Attach resume</button>
+      <button id="tailor" class="btn grow">✨ Tailor resume</button>
+    </div>
+    <p id="status" class="small" role="status"></p>
+  </section>
+
+  <section class="card tracker">
+    <div class="row">
+      <strong>Tracker</strong>
+      <span id="counts" class="muted small"></span>
+    </div>
+    <ul id="jobs"></ul>
+    <p id="empty" class="muted small">Jobs you save or apply to show up here.</p>
+  </section>
+
+  <script src="../shared/schema.js"></script>
+  <script src="../shared/results.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

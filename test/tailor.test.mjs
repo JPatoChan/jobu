@@ -1,0 +1,267 @@
+// Resume tailoring: reading a resume into sections, pulling keywords from a
+// job description, scoring, tailoring without inventing anything, the PDF it
+// produces, and the optional Claude rewrite request.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { loadPure } from './helpers.mjs';
+import { extractText } from '../extension/src/options/resume-text.mjs';
+import { resumePdf, winAnsi } from '../extension/src/tailor/resume-pdf.mjs';
+import { rewriteResume, MODEL } from '../extension/src/tailor/resume-ai.mjs';
+
+const J = loadPure();
+
+const RESUME = `Ada Lovelace
+London, UK | ada@example.com | 555-010-2000 | LinkedIn | GitHub
+EXPERIENCE
+Senior Engineer\tJan 2021 – Present
+Engines Ltd, London
+• Mentored four engineers and ran weekly code reviews
+• Moved CI to GitHub Actions, cutting build time
+by 40%
+• Built REST APIs in Python and Django used by 30 teams
+Software Engineer\tJun 2018 – Dec 2020
+Analytical Co
+- Wrote React and TypeScript front ends
+- Ran PostgreSQL migrations with zero downtime
+EDUCATION
+University of London\tMay 2018
+B.S. Mathematics
+SKILLS
+Languages: Python, TypeScript, SQL,
+JavaScript
+Tools: Docker, AWS, React, Django
+https://www.linkedin.com/in/ada
+https://github.com/ada`;
+
+const JD = `About the role
+Go above and beyond for our payments team. Interns start in Spring 2026.
+What you'll do
+Design REST APIs and microservices
+Requirements
+5+ years building backend services in Python
+Experience with Kubernetes and Docker on AWS
+Strong SQL (PostgreSQL preferred)
+Nice to have
+Experience with Kafka, Terraform (or Pulumi)
+Benefits
+Health, 401K, PTO, TBD`;
+
+test('reads a resume into a name, contact line, entries, bullets and skill groups', () => {
+  const s = J.resumeStructure(RESUME);
+  assert.equal(s.name, 'Ada Lovelace');
+  // Link targets replace the "LinkedIn" / "GitHub" labels.
+  assert.deepEqual(s.contact, ['London, UK', 'ada@example.com', '555-010-2000', 'linkedin.com/in/ada', 'github.com/ada']);
+  assert.deepEqual(s.sections.map((x) => [x.title, x.kind]), [['Experience', 'experience'], ['Education', 'education'], ['Skills', 'skills']]);
+  const [first, second] = s.sections[0].entries;
+  assert.deepEqual(first.head, ['Senior Engineer\tJan 2021 – Present', 'Engines Ltd, London']);
+  assert.equal(first.bullets.length, 3);
+  assert.equal(first.bullets[1], 'Moved CI to GitHub Actions, cutting build time by 40%'); // wrapped line joined
+  assert.deepEqual(second.bullets, ['Wrote React and TypeScript front ends', 'Ran PostgreSQL migrations with zero downtime']);
+  assert.deepEqual(s.sections[1].entries, [{ head: ['University of London\tMay 2018', 'B.S. Mathematics'], bullets: [] }]);
+  assert.deepEqual(s.sections[2].groups, [
+    { label: 'Languages', items: ['Python', 'TypeScript', 'SQL', 'JavaScript'] }, // continued on the next line
+    { label: 'Tools', items: ['Docker', 'AWS', 'React', 'Django'] },
+  ]);
+});
+
+test('finds bullets and entries in a resume without bullet characters', () => {
+  const s = J.resumeStructure(`Grace Hopper
+PROFESSIONAL EXPERIENCE
+Rear Admiral
+US Navy\t1943 – 1986
+Led the team that standardized COBOL across the Navy.
+Wrote the first compiler documentation used by many teams.
+Senior Programmer
+Remington Rand\t1949 – 1967
+Built the A-0 compiler for the UNIVAC I.`);
+  const [navy, rand] = s.sections[0].entries;
+  assert.deepEqual(navy.head, ['Rear Admiral', 'US Navy\t1943 – 1986']);
+  assert.equal(navy.bullets.length, 2);
+  assert.deepEqual(rand.head, ['Senior Programmer', 'Remington Rand\t1949 – 1967']);
+  assert.deepEqual(rand.bullets, ['Built the A-0 compiler for the UNIVAC I.']);
+});
+
+test('weighs job keywords by required, preferred and mentioned, and skips everyday words', () => {
+  const kw = J.jobKeywords(JD);
+  const weight = Object.fromEntries(kw.map((k) => [k.term, k.weight]));
+  assert.equal(weight.Python, 3);
+  assert.equal(weight.Kubernetes, 3);
+  assert.equal(weight.SQL, 3); // "Strong SQL" is required...
+  assert.equal(weight.PostgreSQL, 1); // ...only the bracketed "(PostgreSQL preferred)" isn't
+  assert.equal(weight.Kafka, 1);
+  assert.equal(weight.Pulumi, 1); // found in a list, though not in the lexicon
+  assert.equal(weight.REST, 2);
+  assert.equal(weight.microservices, 2);
+  for (const noise of ['Go', 'Spring', 'TBD', 'PTO', '401K']) assert.ok(!(noise in weight), noise);
+  assert.deepEqual(kw.slice(0, 5).map((k) => k.term).sort(), ['AWS', 'Docker', 'Kubernetes', 'Python', 'SQL'], 'required first');
+});
+
+test('matches the same skill under different names', () => {
+  assert.ok(J.mentions('Deployed on K8s with Postgres', 'Kubernetes'));
+  assert.ok(J.mentions('Deployed on K8s with Postgres', 'PostgreSQL'));
+  assert.ok(J.mentions('Node.js and C++ services', 'Node.js'));
+  assert.ok(J.mentions('Node.js and C++ services', 'C++'));
+  assert.ok(!J.mentions('ASP.NET MVC', '.NET'));
+  assert.ok(J.mentions('Python, R, SQL', 'R'));
+  assert.ok(!J.mentions('R&D budget', 'R'));
+  assert.ok(J.mentions('services in Go and Rust', 'Go'));
+  assert.ok(!J.mentions('teams react quickly', 'React'));
+});
+
+test('scores the resume against the job', () => {
+  const kw = J.jobKeywords(JD);
+  const m = J.matchResume(J.structureText(J.resumeStructure(RESUME)), kw);
+  assert.deepEqual(m.missing.map((k) => k.term), ['Kubernetes', 'microservices', 'Kafka', 'Terraform', 'Pulumi']);
+  const total = kw.reduce((n, k) => n + k.weight, 0);
+  const missing = m.missing.reduce((n, k) => n + k.weight, 0);
+  assert.equal(m.score, Math.round((100 * (total - missing)) / total));
+});
+
+test('tailoring reorders toward the job and adds only confirmed skills', () => {
+  const base = J.resumeStructure(RESUME);
+  const frozen = JSON.stringify(base);
+  const kw = J.jobKeywords(JD);
+  const { structure: s, changes } = J.tailorResume(base, kw, { addSkills: ['Kubernetes'], facts: { title: 'Senior Engineer', years: '8' } });
+
+  assert.equal(JSON.stringify(base), frozen, 'the original is untouched');
+  const bullets = s.sections.find((x) => x.kind === 'experience').entries[0].bullets;
+  assert.equal(bullets[0], 'Built REST APIs in Python and Django used by 30 teams');
+  assert.deepEqual([...bullets].sort(), [...base.sections[0].entries[0].bullets].sort(), 'same bullets, new order');
+  const skills = s.sections.find((x) => x.kind === 'skills').groups;
+  assert.deepEqual(skills[0].items, ['Python', 'SQL', 'TypeScript', 'JavaScript']);
+  assert.deepEqual(skills.at(-1), { label: 'Additional', items: ['Kubernetes'] });
+  assert.equal(s.sections[0].kind, 'summary');
+  // Only skills now on the resume, including the one the user confirmed.
+  assert.equal(s.sections[0].text, 'Senior Engineer with 8+ years of experience, skilled in Python, AWS, Docker and Kubernetes.');
+  assert.equal(changes.length, 4);
+
+  // Unconfirmed missing skills never appear.
+  const text = J.structureText(s);
+  for (const term of ['Kafka', 'Terraform', 'Pulumi', 'microservices']) assert.ok(!J.mentions(text, term), term);
+  assert.ok(J.matchResume(text, kw).score > J.matchResume(J.structureText(base), kw).score);
+});
+
+test('adds no summary when there is nothing true to say', () => {
+  const base = J.resumeStructure('Sam Doe\nEXPERIENCE\nClerk\t2019 – 2020\n• Filed records');
+  const { structure } = J.tailorResume(base, J.jobKeywords('Requirements\nKubernetes and Kafka'), {});
+  assert.ok(!structure.sections.some((x) => x.kind === 'summary'));
+});
+
+test('rejects rewrites that add numbers or skills the resume does not have', () => {
+  const source = 'Senior Engineer\tJan 2021 – Present\nBuilt REST APIs in Python used by 30 teams';
+  const kw = J.jobKeywords(JD);
+  assert.equal(J.checkRewrite('Designed Python REST APIs adopted by 30 teams', source, { keywords: kw }), '');
+  assert.equal(J.checkRewrite('Designed Python REST APIs adopted by 45 teams', source, { keywords: kw }), 'adds the number 45');
+  assert.equal(J.checkRewrite('Designed Python REST APIs on Kubernetes for 30 teams', source, { keywords: kw }), 'adds Kubernetes');
+  assert.equal(J.checkRewrite('Designed Python REST APIs on Kubernetes for 30 teams', source, { keywords: kw, confirmed: ['Kubernetes'] }), '');
+  assert.equal(J.checkRewrite('Built Python APIs with Pulumi for 30 teams', source, { keywords: kw }), 'adds Pulumi');
+});
+
+test('the tailored PDF has real text that reads back in order', async () => {
+  const kw = J.jobKeywords(JD);
+  const { structure } = J.tailorResume(J.resumeStructure(RESUME), kw, { facts: { title: 'Senior Engineer', years: '8' } });
+  const { bytes, dropped } = await resumePdf(structure, { subject: 'Backend Engineer at Globex' });
+  assert.equal(dropped, 0);
+  const text = await extractText(new File([bytes], 'ada.pdf', { type: 'application/pdf' }));
+  const lines = text.split('\n');
+  assert.equal(lines[0], 'Ada Lovelace');
+  assert.match(lines[1], /^London, UK \| ada@example\.com \| 555-010-2000 \| linkedin\.com\/in\/ada \| github\.com\/ada$/);
+  assert.ok(lines.includes('SUMMARY') && lines.includes('EXPERIENCE') && lines.includes('SKILLS'));
+  assert.ok(lines.includes('Senior Engineer\tJan 2021 – Present'), 'dates sit right-aligned on the title line');
+  assert.ok(lines.indexOf('• Built REST APIs in Python and Django used by 30 teams') < lines.indexOf('• Mentored four engineers and ran weekly code reviews'));
+  // A re-read of the tailored PDF gives the same structure back.
+  assert.deepEqual(J.resumeStructure(text).sections.map((x) => x.kind), ['summary', 'experience', 'education', 'skills']);
+});
+
+test('keeps PDF text to characters the font has', () => {
+  assert.deepEqual(winAnsi('Zoë – Łukasz → 李'), { text: 'Zoë – Lukasz -> ', dropped: 1 });
+});
+
+// ---- Claude ----
+
+// A streamed Messages API response, as server-sent events.
+function sse(blocks, stopReason = 'end_turn') {
+  const events = [
+    ['message_start', { type: 'message_start', message: { id: 'msg_1', type: 'message', role: 'assistant', model: MODEL, content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 10, output_tokens: 1 } } }],
+  ];
+  blocks.forEach((b, index) => {
+    if (b.type === 'text') {
+      events.push(['content_block_start', { type: 'content_block_start', index, content_block: { type: 'text', text: '' } }]);
+      events.push(['content_block_delta', { type: 'content_block_delta', index, delta: { type: 'text_delta', text: b.text } }]);
+    } else events.push(['content_block_start', { type: 'content_block_start', index, content_block: b }]);
+    events.push(['content_block_stop', { type: 'content_block_stop', index }]);
+  });
+  events.push(['message_delta', { type: 'message_delta', delta: { stop_reason: stopReason, stop_sequence: null }, usage: { output_tokens: 20 } }]);
+  events.push(['message_stop', { type: 'message_stop' }]);
+  const body = events.map(([e, d]) => `event: ${e}\ndata: ${JSON.stringify(d)}\n\n`).join('');
+  return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream', 'request-id': 'req_1' } });
+}
+
+// In Node the SDK also reads ANTHROPIC_* variables; the extension has none.
+async function withFetch(respond, work) {
+  const real = globalThis.fetch;
+  const env = Object.entries(process.env).filter(([k]) => k.startsWith('ANTHROPIC_'));
+  for (const [k] of env) delete process.env[k];
+  const requests = [];
+  globalThis.fetch = async (url, init) => {
+    requests.push({ url: String(url), headers: new Headers(init.headers), body: JSON.parse(init.body) });
+    return respond();
+  };
+  try {
+    return { result: await work(), requests };
+  } finally {
+    globalThis.fetch = real;
+    Object.assign(process.env, Object.fromEntries(env));
+  }
+}
+
+const ASK = {
+  apiKey: 'sk-ant-test-key',
+  resumeText: 'EXPERIENCE\n• Built REST APIs in Python',
+  summary: '',
+  bullets: [{ id: 'b1', entry: 'Senior Engineer', text: 'Built REST APIs in Python' }],
+  job: { title: 'Backend Engineer', company: 'Globex', description: 'Requirements\nPython, REST' },
+  keywords: ['Python', 'REST'],
+  confirmed: [],
+};
+const ANSWER = JSON.stringify({ summary: 'Backend engineer who builds Python REST APIs.', bullets: [{ id: 'b1', text: 'Designed and built Python REST APIs' }] });
+
+test('asks Claude through the SDK with structured output and server-side fallbacks', async () => {
+  const { result, requests } = await withFetch(() => sse([{ type: 'text', text: ANSWER }]), () => rewriteResume(ASK));
+  assert.deepEqual(result, { summary: 'Backend engineer who builds Python REST APIs.', bullets: { b1: 'Designed and built Python REST APIs' } });
+  const [req] = requests;
+  assert.ok(req.url.startsWith('https://api.anthropic.com/v1/messages'), req.url);
+  assert.equal(req.headers.get('authorization'), 'Bearer sk-ant-test-key');
+  assert.match(req.headers.get('anthropic-beta'), /server-side-fallback-2026-07-01/);
+  assert.equal(req.headers.get('anthropic-dangerous-direct-browser-access'), 'true');
+  const b = req.body;
+  assert.equal(b.model, 'claude-opus-5-5');
+  assert.equal(b.fallbacks, 'default');
+  assert.equal(b.stream, true);
+  assert.equal(b.max_tokens, 16000);
+  assert.deepEqual(b.thinking, { type: 'adaptive' });
+  assert.equal(b.output_config.effort, 'medium');
+  assert.equal(b.output_config.format.type, 'json_schema');
+  assert.deepEqual(b.output_config.format.schema.required, ['summary', 'bullets']);
+  assert.match(b.system, /Never invent anything/);
+  assert.match(b.messages[0].content, /<bullets>[\s\S]*"id": "b1"/);
+});
+
+test('uses only the answer after a fallback switch', async () => {
+  const blocks = [{ type: 'text', text: '{"summ' }, { type: 'fallback', from: { model: MODEL }, to: { model: 'claude-opus-4-8' } }, { type: 'text', text: ANSWER }];
+  const { result } = await withFetch(() => sse(blocks), () => rewriteResume(ASK));
+  assert.equal(result.bullets.b1, 'Designed and built Python REST APIs');
+});
+
+test('explains refusals and a rejected API key', async () => {
+  await assert.rejects(
+    withFetch(() => sse([], 'refusal'), () => rewriteResume(ASK)),
+    { name: 'RewriteError', message: /declined/ },
+  );
+  const denied = () =>
+    new Response(JSON.stringify({ type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } }), {
+      status: 401,
+      headers: { 'content-type': 'application/json' },
+    });
+  await assert.rejects(withFetch(denied, () => rewriteResume(ASK)), { name: 'RewriteError', message: /didn’t accept that API key/ });
+});

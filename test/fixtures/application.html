@@ -1,0 +1,54 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Senior Engineer - Acme</title>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"JobPosting","title":"Senior Engineer","hiringOrganization":{"@type":"Organization","name":"Acme"},"jobLocation":{"@type":"Place","address":{"addressLocality":"San Francisco","addressRegion":"CA"}},"baseSalary":{"currency":"USD","value":{"minValue":150000,"maxValue":200000,"unitText":"YEAR"}}}</script>
+</head>
+<body>
+<h1>Senior Engineer at Acme</h1>
+<form id="application" onsubmit="event.preventDefault()">
+  <!-- Greenhouse style -->
+  <div class="field"><label for="first_name">First Name <span>*</span></label><input id="first_name" name="job_application[first_name]" required></div>
+  <div class="field"><label for="last_name">Last Name</label><input id="last_name" name="job_application[last_name]"></div>
+  <div class="field"><label for="email">Email</label><input id="email" type="email"></div>
+  <div class="field"><label for="phone">Phone</label><input id="phone" type="tel"></div>
+  <div class="field"><label>Resume/CV</label><input id="resume" type="file" accept=".pdf,.doc,.docx" style="display:none"></div>
+
+  <!-- Lever style: label text in a sibling div -->
+  <ul>
+    <li class="application-question"><div class="application-label">LinkedIn URL</div><div class="application-field"><input id="lever_li" name="urls[LinkedIn]"></div></li>
+    <li class="application-question"><div class="application-label">Current company</div><div class="application-field"><input id="org" name="org"></div></li>
+  </ul>
+
+  <!-- Workday style: automation ids, no label -->
+  <div><input id="wd_city" data-automation-id="addressSection_city"></div>
+
+  <!-- Selects and radios -->
+  <div class="field"><label for="state">State</label>
+    <select id="state"><option value="">Select...</option><option value="AL">Alabama</option><option value="CA">California</option></select></div>
+  <fieldset><legend>Are you legally authorized to work in the United States?</legend>
+    <label><input type="radio" name="auth" value="1"> Yes</label><label><input type="radio" name="auth" value="0"> No</label></fieldset>
+  <fieldset><legend>Will you now or in the future require visa sponsorship?</legend>
+    <label><input type="radio" name="sponsor" value="1"> Yes</label><label><input type="radio" name="sponsor" value="0"> No</label></fieldset>
+  <div class="field"><label for="gender">Gender</label>
+    <select id="gender"><option value="">Please select</option><option>Male</option><option>Female</option><option>Decline To Self Identify</option></select></div>
+  <div class="field"><label for="veteran">Veteran Status</label>
+    <select id="veteran"><option value="">Select</option><option>I am a protected veteran</option><option>I am not a protected veteran</option><option>I don't wish to answer</option></select></div>
+
+  <!-- Custom question answered from saved answers -->
+  <div class="field"><label for="why">Why do you want to work at Acme? *</label><textarea id="why" required></textarea></div>
+
+  <!-- Unknown required question: should be flagged, not filled -->
+  <div class="field"><label for="fav">What's your favourite algorithm? *</label><input id="fav" required></div>
+
+  <!-- Consent box must never be ticked -->
+  <label><input type="checkbox" id="consent" name="consent"> I agree to the privacy policy</label>
+
+  <!-- Pre-filled value must be preserved -->
+  <div class="field"><label for="website">Website</label><input id="website" value="https://keep.me"></div>
+
+  <button type="submit">Submit application</button>
+</form>
+</body>
+</html>
