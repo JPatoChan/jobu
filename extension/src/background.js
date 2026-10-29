@@ -35,6 +35,9 @@ chrome.runtime.onInstalled.addListener(({ reason }) => {
     for (const [id, title] of Object.entries(MENU)) chrome.contextMenus.create({ id, title, contexts: ['page', 'editable', 'frame'] });
   });
   if (reason === 'install') chrome.runtime.openOptionsPage();
+  // Claude now runs through Claude Code (shared/claude-code.mjs), so an API
+  // key saved by an earlier version isn't needed any more.
+  if (reason === 'update') chrome.storage.local.remove('anthropicKey');
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => chrome.storage.session.remove(`job:${tabId}`));

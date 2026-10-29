@@ -1,12 +1,13 @@
 // The tailor page, opened beside a job tab from the Jobu panel or popup.
 // Scores the profile's resume against the job, lists the job's keywords and
 // tailors the resume (resume-model.js). It suggests writing skills the way
-// the job does, and Claude can suggest ways to word each bullet
-// (resume-ai.mjs); the user picks one or keeps their own. The user edits the
-// result in place, and it's saved as a PDF that the panel attaches to the
-// application.
+// the job does, and, only when Claude Code is connected, Claude can suggest
+// ways to word each bullet (resume-ai.mjs); the user picks one or keeps their
+// own. The user edits the result in place, and it's saved as a PDF that the
+// panel attaches to the application.
 import { extractText } from '../options/resume-text.mjs';
 import { resumePdf } from './resume-pdf.mjs';
+import { claudeCodeStatus } from '../shared/claude-code.mjs';
 
 const J = globalThis.JOBU;
 const $ = (id) => document.getElementById(id);
@@ -262,7 +263,7 @@ function renderSide() {
   );
   $('reset').hidden = !mine;
   $('ai-undo').hidden = !state.claude.size;
-  $('ai-first').hidden = $('ai-toggle').hidden = !state.options.size;
+  $('ai-toggle').hidden = !state.options.size;
   $('ai-toggle').textContent = state.showOptions ? 'Hide the options' : `Show the options (${state.options.size})`;
 }
 
@@ -295,11 +296,6 @@ function renderJob() {
   document.title = `Tailor Resume${state.job.company ? ` for ${state.job.company}` : ''} · Jobu`;
 }
 
-function renderAi() {
-  $('ai-key').hidden = !!state.key;
-  $('ai-ready').hidden = !state.key;
-}
-
 function retailor() {
   state.tailored = J.tailorResume(state.base, state.keywords, { addSkills: [...state.added], facts: state.facts });
   renderSheet();
@@ -318,17 +314,11 @@ function analyze() {
 
 async function load() {
   const key = `tailor:${tabId}`;
-  const [{ profile, resume }, session, local] = await Promise.all([
-    J.store.load(),
-    tabId ? chrome.storage.session.get(key) : {},
-    chrome.storage.local.get('anthropicKey'),
-  ]);
+  const [{ profile, resume }, session] = await Promise.all([J.store.load(), tabId ? chrome.storage.session.get(key) : {}]);
   state.job = session[key] || {};
   state.profile = profile;
   state.facts = { title: profile.work.currentTitle, years: profile.work.yearsExperience };
-  state.key = local.anthropicKey || '';
   renderJob();
-  renderAi();
   if (tabId) $('attach').hidden = !(await chrome.tabs.get(tabId).catch(() => null));
   if (!resume) return show('need-resume');
 
@@ -473,10 +463,15 @@ $('open-profile').onclick = () => chrome.runtime.openOptionsPage();
 
 // ---- Claude ----
 
+// Claude's card only appears when Claude Code is connected.
+async function checkClaude() {
+  $('ai').hidden = !(await claudeCodeStatus()).connected;
+}
+
 // Sends the resume (without name, contact details and skills the user added)
 // and the job to Claude, and keeps each option only if J.checkRewrite finds
 // nothing in it that the resume doesn't say.
-async function suggest(apiKey) {
+async function suggest() {
   const s = current();
   const { suggestRewrites } = await import('./resume-ai.mjs');
   const bullets = [];
@@ -491,7 +486,6 @@ async function suggest(apiKey) {
   const own = (sec) => (sec.groups ? { ...sec, groups: sec.groups.map((g) => ({ ...g, items: g.items.filter((x) => !state.added.has(x)) })) } : sec);
   const resumeText = J.structureText({ name: '', contact: [], sections: s.sections.map(own) });
   const out = await suggestRewrites({
-    apiKey,
     resumeText,
     summary,
     bullets: bullets.map(({ id, entry, text }) => ({ id, entry, text })),
@@ -531,41 +525,18 @@ async function suggest(apiKey) {
   );
 }
 
-async function runClaude(button, apiKey) {
+$('ai-run').onclick = async () => {
+  const button = $('ai-run');
   button.disabled = true;
   say('ai-msg', 'Claude is reading your resume and the job. This can take a minute…');
   try {
-    await suggest(apiKey);
-    return true;
+    await suggest();
   } catch (err) {
     console.warn('Jobu: rewrite failed', err);
     say('ai-msg', err.name === 'RewriteError' ? err.message : 'Claude couldn’t suggest anything this time. Your resume is unchanged; try again.', 'warn');
-    return false;
   } finally {
     button.disabled = false;
   }
-}
-
-$('ai-key').onsubmit = async (e) => {
-  e.preventDefault();
-  const apiKey = $('key').value.trim();
-  const ok = await runClaude(e.target.querySelector('button'), apiKey);
-  if (!ok) return;
-  $('key').value = '';
-  if ($('remember').checked) {
-    await chrome.storage.local.set({ anthropicKey: apiKey });
-    state.key = apiKey;
-    renderAi();
-  }
-};
-
-$('ai-run').onclick = () => runClaude($('ai-run'), state.key);
-
-$('ai-forget').onclick = async () => {
-  await chrome.storage.local.remove('anthropicKey');
-  state.key = '';
-  renderAi();
-  say('ai-msg', 'Forgot your API key.');
 };
 
 $('ai-undo').onclick = () => {
@@ -579,21 +550,13 @@ $('ai-undo').onclick = () => {
   say('ai-msg', 'Put back your resume as it was before Claude.');
 };
 
-$('ai-first').onclick = () => {
-  for (const [key, o] of state.options) {
-    state.edits.set(key, o.options[0].text);
-    state.claude.set(key, o.options[0].text);
-  }
-  renderSheet();
-  renderSide();
-};
-
 $('ai-toggle').onclick = () => {
   state.showOptions = !state.showOptions;
   renderSheet();
   renderSide();
 };
 
+checkClaude();
 load().catch((err) => {
   console.error('Jobu: tailor page failed', err);
   status('Something went wrong loading this page. Close it and press “Tailor my resume” again.', 'warn');

@@ -1,2 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# The Claude Code scripts run under sh, which needs LF line endings.
+*.sh text eol=lf

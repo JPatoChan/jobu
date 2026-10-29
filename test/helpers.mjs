@@ -139,7 +139,8 @@ export function loadBackground(page) {
       const t = setInterval(() => reported.length > n && (clearInterval(t), resolve(structuredClone(reported[n]))), 20);
     });
   const run = (code) => vm.runInContext(code, ctx);
-  return { call, nextReport, reported, session, created, run };
+  const installed = (details) => listeners.installed(details);
+  return { call, nextReport, reported, session, created, run, installed };
 }
 
 export const PROFILE = {

@@ -50,6 +50,9 @@ textarea { min-height: 120px; resize: vertical; }
 .answer .del:hover { color: var(--danger); }
 .check { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+code { padding: 1px 4px; border: 1px solid var(--line); border-radius: 4px; font-size: 12px; background: var(--bg); overflow-wrap: anywhere; }
+.claude-command { display: block; padding: 8px 10px; user-select: all; }
+.claude-connect .row { align-items: center; margin-bottom: 8px; }
 kbd { border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; font-size: 12px; background: var(--bg); }
 @media (max-width: 600px) {
   .answer { grid-template-columns: 1fr auto; }

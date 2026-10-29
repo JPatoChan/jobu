@@ -141,8 +141,7 @@
   J.deepMerge = deepMerge;
 
   // Storage keys: profile, resume, coverLetterFile, settings, jobs, tailored
-  // (resumes made on the tailor page), vault and vaultIndex (shared/vault.js),
-  // anthropicKey (only if the user asks to remember it).
+  // (resumes made on the tailor page), vault and vaultIndex (shared/vault.js).
   J.store = {
     async load() {
       const s = await chrome.storage.local.get(['profile', 'resume', 'coverLetterFile', 'settings']);

@@ -17,7 +17,7 @@
   </header>
 
   <main>
-    <p class="intro muted">Jobu fills job applications from this profile. Everything stays in your browser. Nothing is sent anywhere unless you ask Claude to rewrite a tailored resume. Changes save automatically.</p>
+    <p class="intro muted">Jobu fills job applications from this profile. Everything stays in your browser. Nothing is sent anywhere unless you connect Claude Code and ask Claude to rewrite a tailored resume. Changes save automatically.</p>
 
     <section class="card">
       <h2>Resume &amp; cover letter</h2>
@@ -109,6 +109,17 @@
       <p class="muted">Shortcuts: <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd> autofills the page, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd> goes to the next page, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>J</kbd> opens the Jobu panel, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd> goes to the next field Jobu left empty. Submit has no default key. Set one, or change the others, at chrome://extensions/shortcuts.</p>
     </section>
 
+    <section class="card" id="claude">
+      <h2>Claude Code <span class="pill">optional</span></h2>
+      <p class="muted">Jobu works without AI. If you use Claude Code on this computer, you can connect it to get rewrite options from Claude on the tailor page. Nothing else in Jobu uses Claude, and it stays off until you connect it.</p>
+      <p class="claude-status" role="status">Checking for Claude Code…</p>
+      <div class="claude-connect" hidden>
+        <div class="row"><code class="claude-command grow"></code><button class="btn" data-claude="copy">Copy</button></div>
+        <p class="muted small">Needs Claude Code on macOS or Linux. To turn it off again, run <code>sh scripts/connect-claude.sh --remove</code>.</p>
+      </div>
+      <div class="actions"><button class="btn" data-claude="check">Check again</button></div>
+    </section>
+
     <section class="card">
       <h2>Backup</h2>
       <div class="actions">
@@ -124,5 +135,6 @@
   <script src="options.js"></script>
   <script src="../shared/vault.js"></script>
   <script src="passwords.js"></script>
+  <script type="module" src="claude.mjs"></script>
 </body>
 </html>

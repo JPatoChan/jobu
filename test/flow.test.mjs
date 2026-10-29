@@ -109,3 +109,12 @@ test('Submit goes straight through when confirmation is off', async () => {
   const r = await report;
   assert.equal(r.submitted, true);
 });
+
+test('an update deletes the Anthropic API key earlier versions saved', () => {
+  const { bg, page } = setup();
+  page.store.anthropicKey = 'sk-ant-old';
+  bg.installed({ reason: 'install' });
+  assert.equal(page.store.anthropicKey, 'sk-ant-old');
+  bg.installed({ reason: 'update' });
+  assert.equal('anthropicKey' in page.store, false);
+});

@@ -32,9 +32,6 @@ button.chip:hover { border-color: var(--brand); color: var(--brand); }
 .changes li.none { list-style: none; margin-left: -18px; color: var(--muted); }
 .link-btn { border: 0; background: none; padding: 2px 0; color: var(--brand); font: inherit; font-size: 13px; cursor: pointer; }
 .link-btn:hover { text-decoration: underline; }
-.field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
-.label { font-size: 12px; font-weight: 600; color: var(--muted); }
-.check { display: flex; gap: 8px; align-items: center; margin: 6px 0 10px; }
 .ai-ready { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
 #ai-msg:empty { display: none; }
 #ai-msg.ok { color: var(--ok); }

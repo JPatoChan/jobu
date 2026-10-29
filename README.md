@@ -29,7 +29,7 @@ Jobu is a Chrome extension (Manifest V3) that scans job applications, autofills 
   - **Use the job's wording.** Where your resume names a skill differently from the job ("JS" for "JavaScript", "K8s" for "Kubernetes", "Postgres" for "PostgreSQL"), Jobu offers to write it the job's way. It only swaps names for the same thing, never related ones like Unix and Linux.
   - You can edit any line in place, or remove bullets. The score updates as you go.
   - *Use for this application* saves it as a PDF with real, selectable text and attaches it to the job's upload field. *Download PDF* saves a copy.
-  - **Optional: rewrite options from Claude.** With your own Anthropic API key, Claude (`claude-opus-5-5`) suggests up to three ways to word your summary and each bullet for this job. Each option says what it brings out ("API design", "mentoring"). They appear under each part of the resume next to *Your wording*. Click one to use it, or *Use Claude's first option everywhere*. Jobu checks every option against your resume and hides any that add a number, a skill or a name your resume doesn't have, including skills you added with *I have this*. The options you pick are marked, and *Undo Claude's changes* puts your wording back.
+  - **Optional: rewrite options from Claude.** Only there if you [connect Claude Code](#connect-claude-code-optional); otherwise the tailor page has no AI in it. Claude suggests up to three ways to word your summary and each bullet for this job. Each option says what it brings out ("API design", "mentoring"). They appear under each part of the resume next to *Your wording*; click one to use it. Jobu checks every option against your resume and hides any that add a number, a skill or a name your resume doesn't have, including skills you added with *I have this*. The options you pick are marked, and *Undo Claude's changes* puts your wording back.
 - **Saved passwords for job-site accounts.** Workday, iCIMS and Taleo make you create an account to apply. On those pages the panel offers *Create password*: Jobu generates a strong 16-character password, fills it into both boxes, and saves it for that site. On the site's sign-in page it offers *Fill saved password*, and it can also save a password you typed. Turn this on in your profile with a passphrase of your choice:
   - Passwords are encrypted with AES-GCM, using a key derived from your passphrase (PBKDF2, 600,000 rounds).
   - The vault unlocks only on the profile page and locks when the browser closes.
@@ -38,7 +38,7 @@ Jobu is a Chrome extension (Manifest V3) that scans job applications, autofills 
 - **Saved answers.** After you answer a company-specific question ("Why do you want to work here?"), use *Remember my answers* in the panel. The next form that asks a similar question gets filled automatically.
 - **Job tracker.** Save a job from the panel, the popup or the right-click menu. Track its status: saved, applied, interview, offer, or rejected. Job details come from the page's `JobPosting` structured data or from ATS-specific selectors. In multi-step flows (Workday, iCIMS), Jobu remembers the posting from the first page, so the right job is marked applied.
 - **Ways to trigger it:** the in-page panel, the toolbar popup, the right-click menu, or shortcuts: <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd> autofill, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd> next page, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>J</kbd> panel, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd> next empty field. *Submit* has no default key; you can assign one at `chrome://extensions/shortcuts`.
-- **Private.** Your profile, resume, tailored resumes, encrypted passwords and tracker live in `chrome.storage.local`. Your resume is parsed and tailored in the extension. Nothing leaves your browser, with one exception you opt into: *Get rewrite options* sends your resume and the job description to Anthropic with your API key. Your name and contact details are left out. The key is stored in this browser only if you tick *Remember it*.
+- **Private.** Your profile, resume, tailored resumes, encrypted passwords and tracker live in `chrome.storage.local`. Your resume is parsed and tailored in the extension. Nothing leaves your browser, with one exception you opt into: once you've connected Claude Code, *Get rewrite options* sends your resume and the job description to Claude through Claude Code, with your Claude Code sign-in. Your name and contact details are left out.
 
 ## Install (developer mode)
 
@@ -49,6 +49,19 @@ Jobu is a Chrome extension (Manifest V3) that scans job applications, autofills 
 
 To try it on the bundled sample forms, enable **Allow access to file URLs** for Jobu on `chrome://extensions`. Then open `test/fixtures/application.html` (single page) or `test/fixtures/multistep.html` (a three-step, Workday-style flow with validation and a confirmation page).
 
+## Connect Claude Code (optional)
+
+Jobu works without AI, and its only AI feature (rewrite options on the tailor page) stays hidden until Claude Code is connected. Jobu doesn't take an API key; it uses the Claude Code CLI on your computer, with your sign-in and the model you've set there. macOS and Linux.
+
+1. Install [Claude Code](https://code.claude.com/docs/en/setup) and sign in by running `claude` once.
+2. Open Jobu's profile page. The *Claude Code* card shows a command with your copy of Jobu's extension id in it. Run it in a terminal, in this folder:
+   ```
+   sh scripts/connect-claude.sh <extension id>
+   ```
+3. Click *Check again*. The card says which Claude Code it's connected to, and the tailor page now offers *Get rewrite options*.
+
+The script copies `scripts/claude-host.sh` to `~/.local/share/jobu` (on a Mac, `~/Library/Application Support/Jobu`) and registers it as the native messaging host `com.jobu.claude` with each Chromium browser you have (Chrome, Chromium, Edge, Brave, Vivaldi). Only this extension id may use it. The host runs `claude -p` with no tools, no MCP servers, in an empty temporary folder, without saving the session, so text in a job posting can't make Claude do anything on your computer. Run the script again if Claude Code moves. `sh scripts/connect-claude.sh --remove` disconnects it and turns the AI feature off again.
+
 ## Layout
 
 ```
@@ -58,6 +71,7 @@ extension/
   src/shared/schema.js       profile schema, defaults, storage helpers
   src/shared/results.js      one-line summaries of action results (panel, toasts, popup)
   src/shared/vault.js        encrypted password vault (WebCrypto), password generator
+  src/shared/claude-code.mjs talks to Claude Code through the native messaging host: is it connected, ask Claude
   src/content/classifier.js  label → profile field rules, option matching, saved-answer matching (pure)
   src/content/dom.js         question/label discovery, framework-safe fill primitives, field focus, page errors, field outlines
   src/content/autofill.js    control collection, page scan, fill orchestration, answer learning
@@ -71,19 +85,21 @@ extension/
   src/options/resume-text.mjs  resume file → text: PDF via pdf.js, DOCX unzipped in the page, RTF, TXT
   src/options/resume-parse.js  resume text → profile fields (pure)
   src/options/passwords.js   the profile page's saved-passwords card
+  src/options/claude.mjs     the profile page's Claude Code card: connected or not, and the command that connects it
   src/tailor/                the tailor page:
     resume-model.js          resume structure, job keywords, match score, tailoring, job wording, rewrite checks (pure)
     resume-pdf.mjs           resume structure → PDF with pdf-lib
-    resume-ai.mjs            optional Claude rewrite options through the Anthropic SDK
+    resume-ai.mjs            optional Claude rewrite options, through Claude Code
     tailor.html/.css/.js     the page: score, keywords, editor, save / attach / download
-  vendor/pdfjs/              pdf.js legacy build          ┐
-  vendor/pdf-lib/            pdf-lib ESM build            ├ written by `npm run vendor`
-  vendor/anthropic/          Anthropic SDK, one file      ┘
-scripts/vendor.mjs           copies pdf.js and pdf-lib, bundles the Anthropic SDK with esbuild
+  vendor/pdfjs/              pdf.js legacy build          ┐ written by `npm run vendor`
+  vendor/pdf-lib/            pdf-lib ESM build            ┘
+scripts/vendor.mjs           copies pdf.js and pdf-lib
+scripts/connect-claude.sh    connects Claude Code: installs and registers the native messaging host (or --remove)
+scripts/claude-host.sh       the native messaging host: runs claude -p with no tools for the tailor page
 test/                        node:test + jsdom tests, sample forms, and a sandboxed service worker
 ```
 
-The tailoring tests (`test/tailor.test.mjs`) check that tailoring never adds a skill you didn't confirm, read the generated PDF back through pdf.js, and check the Claude request (model, structured output, fallbacks) against a mocked `fetch`. They also check that a rewrite can't add a number, skill or name, and that wording suggestions only swap spellings of the same skill. `test/attach.test.mjs` covers attaching and the tailor page's job hand-off, and `test/passwords.test.mjs` covers the vault and account pages.
+The tailoring tests (`test/tailor.test.mjs`) check that tailoring never adds a skill you didn't confirm, read the generated PDF back through pdf.js, and check the Claude request and its error messages against a mocked native messaging host, including that Claude stays off when Claude Code isn't connected. They also check that a rewrite can't add a number, skill or name, and that wording suggestions only swap spellings of the same skill. `test/attach.test.mjs` covers attaching and the tailor page's job hand-off, and `test/passwords.test.mjs` covers the vault and account pages. `test/claude-host.test.mjs` runs `scripts/claude-host.sh` and `scripts/connect-claude.sh` against a fake `claude`: the message framing, the flags Claude runs with, the messages the host refuses, and registering and removing it.
 
 The resume tests (`test/resume.test.mjs`) build real PDF and DOCX files in memory (`test/resume-files.mjs`) and run them through the same extraction code the options page uses.
 
@@ -100,7 +116,7 @@ npm install
 npm test
 ```
 
-`extension/vendor` ships with the source, so the extension loads without a build step. After upgrading `pdfjs-dist`, `pdf-lib` or `@anthropic-ai/sdk`, run `npm run vendor`. The SDK's ESM files import other packages by name, which extension pages can't resolve, so the script bundles it into `vendor/anthropic/sdk.mjs` with esbuild (`platform: 'browser'` uses the SDK's browser build, without its Node-only modules).
+`extension/vendor` ships with the source, so the extension loads without a build step. After upgrading `pdfjs-dist` or `pdf-lib`, run `npm run vendor`.
 
 To recognize a new skill or tool in job descriptions, add it to `LEXICON` in `src/tailor/resume-model.js`. Aliases go after a `|`, and a leading `=` makes an alias case-sensitive (for names that are also everyday words, like `=Rust`). Names that need more context, like Go, R or Spring, have their own patterns in `SPECIAL`.
 

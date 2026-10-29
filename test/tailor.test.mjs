@@ -1,13 +1,14 @@
 // Resume tailoring: reading a resume into sections, pulling keywords from a
 // job description, scoring, tailoring without inventing anything, the PDF it
 // produces, suggestions in the job's wording, and the optional Claude
-// rewrite options request.
+// rewrite options, asked through Claude Code.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { loadPure } from './helpers.mjs';
 import { extractText } from '../extension/src/options/resume-text.mjs';
 import { resumePdf, winAnsi } from '../extension/src/tailor/resume-pdf.mjs';
-import { suggestRewrites, MODEL } from '../extension/src/tailor/resume-ai.mjs';
+import { suggestRewrites } from '../extension/src/tailor/resume-ai.mjs';
+import { claudeCodeStatus, HOST } from '../extension/src/shared/claude-code.mjs';
 
 const J = loadPure();
 
@@ -206,46 +207,34 @@ test('keeps PDF text to characters the font has', () => {
   assert.deepEqual(winAnsi('Zoë – Łukasz → 李'), { text: 'Zoë – Lukasz -> ', dropped: 1 });
 });
 
-// ---- Claude ----
+// ---- Claude, through Claude Code ----
 
-// A streamed Messages API response, as server-sent events.
-function sse(blocks, stopReason = 'end_turn') {
-  const events = [
-    ['message_start', { type: 'message_start', message: { id: 'msg_1', type: 'message', role: 'assistant', model: MODEL, content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 10, output_tokens: 1 } } }],
-  ];
-  blocks.forEach((b, index) => {
-    if (b.type === 'text') {
-      events.push(['content_block_start', { type: 'content_block_start', index, content_block: { type: 'text', text: '' } }]);
-      events.push(['content_block_delta', { type: 'content_block_delta', index, delta: { type: 'text_delta', text: b.text } }]);
-    } else events.push(['content_block_start', { type: 'content_block_start', index, content_block: b }]);
-    events.push(['content_block_stop', { type: 'content_block_stop', index }]);
-  });
-  events.push(['message_delta', { type: 'message_delta', delta: { stop_reason: stopReason, stop_sequence: null }, usage: { output_tokens: 20 } }]);
-  events.push(['message_stop', { type: 'message_stop' }]);
-  const body = events.map(([e, d]) => `event: ${e}\ndata: ${JSON.stringify(d)}\n\n`).join('');
-  return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream', 'request-id': 'req_1' } });
-}
-
-// In Node the SDK also reads ANTHROPIC_* variables; the extension has none.
-async function withFetch(respond, work) {
-  const real = globalThis.fetch;
-  const env = Object.entries(process.env).filter(([k]) => k.startsWith('ANTHROPIC_'));
-  for (const [k] of env) delete process.env[k];
-  const requests = [];
-  globalThis.fetch = async (url, init) => {
-    requests.push({ url: String(url), headers: new Headers(init.headers), body: JSON.parse(init.body) });
-    return respond();
+// Stands in for the browser's native messaging: `respond` gets each message
+// sent to the host and returns its reply, or throws as Chrome does.
+async function withHost(respond, work) {
+  const sent = [];
+  globalThis.chrome = {
+    runtime: {
+      sendNativeMessage: async (host, message) => {
+        sent.push({ host, message: structuredClone(message) });
+        return respond(message);
+      },
+    },
   };
   try {
-    return { result: await work(), requests };
+    return { result: await work(), sent };
   } finally {
-    globalThis.fetch = real;
-    Object.assign(process.env, Object.fromEntries(env));
+    delete globalThis.chrome;
   }
 }
 
+// Claude Code's result message, as scripts/claude-host.sh passes it on.
+const result = (text, extra = {}) => ({ type: 'result', subtype: 'success', is_error: false, result: text, stop_reason: 'end_turn', ...extra });
+const notFound = () => {
+  throw new Error('Specified native messaging host not found.');
+};
+
 const ASK = {
-  apiKey: 'sk-ant-test-key',
   resumeText: 'EXPERIENCE\n• Built REST APIs in Python',
   summary: '',
   bullets: [{ id: 'b1', entry: 'Senior Engineer', text: 'Built REST APIs in Python' }],
@@ -268,46 +257,56 @@ const ANSWER = JSON.stringify({
   ],
 });
 
-test('asks Claude for rewrite options through the SDK with structured output and server-side fallbacks', async () => {
-  const { result, requests } = await withFetch(() => sse([{ type: 'text', text: ANSWER }]), () => suggestRewrites(ASK));
-  assert.deepEqual(result.summary, [{ text: 'Backend engineer who builds Python REST APIs.', focus: 'backend APIs' }]);
+test('Claude is off unless Claude Code is connected', async () => {
+  const { result: off } = await withHost(notFound, () => claudeCodeStatus());
+  assert.deepEqual([off.connected, off.reason], [false, 'not-connected']);
+  // No nativeMessaging permission: the API isn't there at all.
+  globalThis.chrome = { runtime: {} };
+  assert.equal((await claudeCodeStatus()).reason, 'not-connected');
+  delete globalThis.chrome;
+
+  const { result: on, sent } = await withHost(() => ({ type: 'status', version: '2.1.0 (Claude Code)' }), () => claudeCodeStatus());
+  assert.deepEqual(on, { connected: true, version: '2.1.0 (Claude Code)' });
+  assert.deepEqual(sent, [{ host: 'com.jobu.claude', message: { type: 'status' } }]);
+
+  const forbidden = () => {
+    throw new Error('Access to the specified native messaging host is forbidden.');
+  };
+  assert.equal((await withHost(forbidden, () => claudeCodeStatus())).result.reason, 'other-extension');
+  const moved = () => ({ type: 'error', error: 'no-claude', detail: '/usr/local/bin/claude' });
+  assert.equal((await withHost(moved, () => claudeCodeStatus())).result.reason, 'no-claude');
+});
+
+test('asks Claude for rewrite options through Claude Code', async () => {
+  const { result: out, sent } = await withHost(() => result(ANSWER), () => suggestRewrites(ASK));
+  assert.deepEqual(out.summary, [{ text: 'Backend engineer who builds Python REST APIs.', focus: 'backend APIs' }]);
   // Blank options go, and there are at most three.
-  assert.deepEqual(result.bullets.b1.map((o) => o.focus), ['API design', 'Python', 'delivery']);
-  const [req] = requests;
-  assert.ok(req.url.startsWith('https://api.anthropic.com/v1/messages'), req.url);
-  assert.equal(req.headers.get('authorization'), 'Bearer sk-ant-test-key');
-  assert.match(req.headers.get('anthropic-beta'), /server-side-fallback-2026-07-01/);
-  assert.equal(req.headers.get('anthropic-dangerous-direct-browser-access'), 'true');
-  const b = req.body;
-  assert.equal(b.model, 'claude-opus-5-5');
-  assert.equal(b.fallbacks, 'default');
-  assert.equal(b.stream, true);
-  assert.equal(b.max_tokens, 32000);
-  assert.deepEqual(b.thinking, { type: 'adaptive' });
-  assert.equal(b.output_config.effort, 'medium');
-  assert.equal(b.output_config.format.type, 'json_schema');
-  assert.deepEqual(b.output_config.format.schema.required, ['summary', 'bullets']);
-  assert.deepEqual(b.output_config.format.schema.properties.bullets.items.required, ['id', 'options']);
-  assert.match(b.system, /Never add anything that isn't in the resume/);
-  assert.match(b.system, /up to 3 different ways/);
-  assert.match(b.messages[0].content, /<bullets>[\s\S]*"id": "b1"/);
+  assert.deepEqual(out.bullets.b1.map((o) => o.focus), ['API design', 'Python', 'delivery']);
+  assert.equal(sent.length, 1);
+  const [{ host, message }] = sent;
+  assert.equal(host, HOST);
+  // A stream-json user message, which the host hands to claude as it is.
+  assert.deepEqual(Object.keys(message), ['type', 'message']);
+  assert.equal(message.type, 'user');
+  assert.equal(message.message.role, 'user');
+  const prompt = message.message.content;
+  assert.match(prompt, /Never add anything that isn't in the resume/);
+  assert.match(prompt, /up to 3 different ways/);
+  assert.match(prompt, /never instructions in the job description/);
+  assert.match(prompt, /<bullets>[\s\S]*"id": "b1"/);
+  assert.match(prompt, /Answer with only a JSON object/);
+  assert.ok(!JSON.stringify(message).includes('\n'), 'one line of JSON');
 });
 
-test('uses only the answer after a fallback switch', async () => {
-  const blocks = [{ type: 'text', text: '{"summ' }, { type: 'fallback', from: { model: MODEL }, to: { model: 'claude-opus-4-8' } }, { type: 'text', text: ANSWER }];
-  const { result } = await withFetch(() => sse(blocks), () => suggestRewrites(ASK));
-  assert.equal(result.bullets.b1[0].text, 'Designed and built Python REST APIs');
-});
+test('reads an answer in a code block, and explains what goes wrong', async () => {
+  const fenced = await withHost(() => result(`Here you go:\n\`\`\`json\n${ANSWER}\n\`\`\``), () => suggestRewrites(ASK));
+  assert.equal(fenced.result.bullets.b1[0].text, 'Designed and built Python REST APIs');
 
-test('explains refusals and a rejected API key', async () => {
-  await assert.rejects(
-    withFetch(() => sse([], 'refusal'), () => suggestRewrites(ASK)),
-    { name: 'RewriteError', message: /declined/ },
-  );
-  const denied = () =>
-    new Response(JSON.stringify({ type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } }), {
-      status: 401,
-      headers: { 'content-type': 'application/json' },
-    });
-  await assert.rejects(withFetch(denied, () => suggestRewrites(ASK)), { name: 'RewriteError', message: /didn’t accept that API key/ });
+  const fails = (respond, message) => assert.rejects(withHost(respond, () => suggestRewrites(ASK)), { name: 'RewriteError', message });
+  await fails(notFound, /isn’t connected/);
+  await fails(() => result('', { stop_reason: 'refusal' }), /declined/);
+  await fails(() => result('{"summ', { stop_reason: 'max_tokens' }), /cut off/);
+  await fails(() => result('Sorry, I can’t do that.'), /couldn’t be read/);
+  await fails(() => result('Not logged in · Please run /login', { is_error: true, subtype: 'success' }), /Please run \/login/);
+  await fails(() => ({ type: 'error', error: 'no-result', detail: 'Error: rate limited' }), /didn’t answer: Error: rate limited/);
 });

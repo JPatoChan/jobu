@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Jobu — Job Application Autofill",
   "short_name": "Jobu",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Scan and autofill job applications, step through multi-page forms, submit, and track every job you apply to.",
   "icons": {
     "16": "icons/icon16.png",
@@ -22,7 +22,7 @@
   "background": {
     "service_worker": "src/background.js"
   },
-  "permissions": ["storage", "unlimitedStorage", "scripting", "activeTab", "contextMenus"],
+  "permissions": ["storage", "unlimitedStorage", "scripting", "activeTab", "contextMenus", "nativeMessaging"],
   "host_permissions": ["<all_urls>"],
   "content_scripts": [
     {

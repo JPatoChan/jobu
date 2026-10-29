@@ -2,12 +2,7 @@
 // into extension/vendor. Run after upgrading any of them: npm run vendor
 //   pdf.js (legacy build: polyfills newer JS for older Chrome) reads PDF resumes.
 //   pdf-lib writes tailored resumes as PDF.
-//   The Anthropic SDK rewrites resumes with Claude when the user adds an API
-//   key. Its ESM files import other packages by name, which extension pages
-//   can't resolve, so it's bundled into one file with esbuild.
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { build } from 'esbuild';
 
 const modules = new URL('../node_modules/', import.meta.url);
 const vendor = new URL('../extension/vendor/', import.meta.url);
@@ -21,7 +16,6 @@ const COPIES = {
     ['pdf-lib/dist/pdf-lib.esm.min.js', 'pdf-lib.esm.min.mjs'],
     ['pdf-lib/LICENSE.md', 'LICENSE.md'],
   ],
-  anthropic: [['@anthropic-ai/sdk/LICENSE', 'LICENSE']],
 };
 for (const [dir, files] of Object.entries(COPIES)) {
   const to = new URL(`${dir}/`, vendor);
@@ -37,18 +31,3 @@ for (const [dir, files] of Object.entries(COPIES)) {
   }
   console.log(`${dir} copied to extension/vendor/${dir}`);
 }
-
-// platform 'browser' follows the SDK's "browser" field, which swaps out its
-// Node-only modules.
-await build({
-  stdin: { contents: "export { default } from '@anthropic-ai/sdk'; export * from '@anthropic-ai/sdk';", resolveDir: fileURLToPath(modules) },
-  bundle: true,
-  format: 'esm',
-  platform: 'browser',
-  target: 'chrome120',
-  minify: true,
-  legalComments: 'none',
-  outfile: fileURLToPath(new URL('anthropic/sdk.mjs', vendor)),
-  logLevel: 'warning',
-});
-console.log('@anthropic-ai/sdk bundled to extension/vendor/anthropic/sdk.mjs');
