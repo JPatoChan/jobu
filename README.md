@@ -26,9 +26,10 @@ Jobu is a Chrome extension (Manifest V3) that scans job applications, autofills 
   - It reads the job description (from the posting's structured data or the page; paste it if Jobu can't find it) and pulls out the skills and tools it asks for. Requirements count most, nice-to-haves least.
   - It shows a keyword match score for your resume, which keywords you have, and which are missing.
   - It moves the bullets and skills that match the job to the top and adds a short summary if you have none. A missing skill is only added after you click *I have this*.
+  - **Use the job's wording.** Where your resume names a skill differently from the job ("JS" for "JavaScript", "K8s" for "Kubernetes", "Postgres" for "PostgreSQL"), Jobu offers to write it the job's way. It only swaps names for the same thing, never related ones like Unix and Linux.
   - You can edit any line in place, or remove bullets. The score updates as you go.
   - *Use for this application* saves it as a PDF with real, selectable text and attaches it to the job's upload field. *Download PDF* saves a copy.
-  - **Optional: Rewrite with Claude.** With your own Anthropic API key, Claude (`claude-opus-5-5`) rewrites your summary and bullets in the job's words. Jobu checks each rewrite and keeps your original wherever it adds a number or skill that isn't on your resume. Rewrites are marked, and *Undo Claude's changes* puts them back.
+  - **Optional: rewrite options from Claude.** With your own Anthropic API key, Claude (`claude-opus-5-5`) suggests up to three ways to word your summary and each bullet for this job. Each option says what it brings out ("API design", "mentoring"). They appear under each part of the resume next to *Your wording*. Click one to use it, or *Use Claude's first option everywhere*. Jobu checks every option against your resume and hides any that add a number, a skill or a name your resume doesn't have, including skills you added with *I have this*. The options you pick are marked, and *Undo Claude's changes* puts your wording back.
 - **Saved passwords for job-site accounts.** Workday, iCIMS and Taleo make you create an account to apply. On those pages the panel offers *Create password*: Jobu generates a strong 16-character password, fills it into both boxes, and saves it for that site. On the site's sign-in page it offers *Fill saved password*, and it can also save a password you typed. Turn this on in your profile with a passphrase of your choice:
   - Passwords are encrypted with AES-GCM, using a key derived from your passphrase (PBKDF2, 600,000 rounds).
   - The vault unlocks only on the profile page and locks when the browser closes.
@@ -37,7 +38,7 @@ Jobu is a Chrome extension (Manifest V3) that scans job applications, autofills 
 - **Saved answers.** After you answer a company-specific question ("Why do you want to work here?"), use *Remember my answers* in the panel. The next form that asks a similar question gets filled automatically.
 - **Job tracker.** Save a job from the panel, the popup or the right-click menu. Track its status: saved, applied, interview, offer, or rejected. Job details come from the page's `JobPosting` structured data or from ATS-specific selectors. In multi-step flows (Workday, iCIMS), Jobu remembers the posting from the first page, so the right job is marked applied.
 - **Ways to trigger it:** the in-page panel, the toolbar popup, the right-click menu, or shortcuts: <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd> autofill, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd> next page, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>J</kbd> panel, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd> next empty field. *Submit* has no default key; you can assign one at `chrome://extensions/shortcuts`.
-- **Private.** Your profile, resume, tailored resumes, encrypted passwords and tracker live in `chrome.storage.local`. Your resume is parsed and tailored in the extension. Nothing leaves your browser, with one exception you opt into: *Rewrite with Claude* sends your resume and the job description to Anthropic with your API key. Your name and contact details are left out. The key is stored in this browser only if you tick *Remember it*.
+- **Private.** Your profile, resume, tailored resumes, encrypted passwords and tracker live in `chrome.storage.local`. Your resume is parsed and tailored in the extension. Nothing leaves your browser, with one exception you opt into: *Get rewrite options* sends your resume and the job description to Anthropic with your API key. Your name and contact details are left out. The key is stored in this browser only if you tick *Remember it*.
 
 ## Install (developer mode)
 
@@ -71,9 +72,9 @@ extension/
   src/options/resume-parse.js  resume text → profile fields (pure)
   src/options/passwords.js   the profile page's saved-passwords card
   src/tailor/                the tailor page:
-    resume-model.js          resume structure, job keywords, match score, tailoring, rewrite checks (pure)
+    resume-model.js          resume structure, job keywords, match score, tailoring, job wording, rewrite checks (pure)
     resume-pdf.mjs           resume structure → PDF with pdf-lib
-    resume-ai.mjs            optional Claude rewrite through the Anthropic SDK
+    resume-ai.mjs            optional Claude rewrite options through the Anthropic SDK
     tailor.html/.css/.js     the page: score, keywords, editor, save / attach / download
   vendor/pdfjs/              pdf.js legacy build          ┐
   vendor/pdf-lib/            pdf-lib ESM build            ├ written by `npm run vendor`
@@ -82,7 +83,7 @@ scripts/vendor.mjs           copies pdf.js and pdf-lib, bundles the Anthropic SD
 test/                        node:test + jsdom tests, sample forms, and a sandboxed service worker
 ```
 
-The tailoring tests (`test/tailor.test.mjs`) check that tailoring never adds a skill you didn't confirm, read the generated PDF back through pdf.js, and check the Claude request (model, structured output, fallbacks) against a mocked `fetch`. `test/attach.test.mjs` covers attaching and the tailor page's job hand-off, and `test/passwords.test.mjs` covers the vault and account pages.
+The tailoring tests (`test/tailor.test.mjs`) check that tailoring never adds a skill you didn't confirm, read the generated PDF back through pdf.js, and check the Claude request (model, structured output, fallbacks) against a mocked `fetch`. They also check that a rewrite can't add a number, skill or name, and that wording suggestions only swap spellings of the same skill. `test/attach.test.mjs` covers attaching and the tailor page's job hand-off, and `test/passwords.test.mjs` covers the vault and account pages.
 
 The resume tests (`test/resume.test.mjs`) build real PDF and DOCX files in memory (`test/resume-files.mjs`) and run them through the same extraction code the options page uses.
 

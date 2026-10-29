@@ -6,6 +6,9 @@
 //   J.matchResume: how many of those the resume shows, as a 0-100 score.
 //   J.tailorResume: moves the bullets and skills that match the job to the
 //     top, and adds only the skills the user confirmed they have.
+//   J.wordingSuggestions: skills the resume writes differently from the job
+//     ("JS" for "JavaScript"), to swap in the job's wording.
+//   J.checkRewrite: whether a rewrite says anything the resume doesn't.
 // Pure, so it runs in Node tests. Needs options/resume-parse.js.
 (function (root) {
   const J = (root.JOBU = root.JOBU || {});
@@ -338,17 +341,73 @@
   // "2M", "40%", "$1,200" but not the 2 in "EC2".
   const numbersIn = (text) => (String(text).match(/(?<![A-Za-z])\d[\d,.]*/g) || []).map((n) => n.replace(/[,.]+$/, '').replace(/,/g, ''));
 
+  const globalRe = (re) => new RegExp(re.source, `${re.flags.replace('g', '')}g`);
+  const wordsOf = (text) => String(text).match(/[\p{L}\p{N}][\p{L}\p{N}+#&'’-]*/gu) || [];
+
   // Why a rewrite can't be used, or '' if it only says what the source (the
-  // bullet's entry, or the whole resume) says: no number and no skill that
-  // isn't in the source, apart from skills the user confirmed.
+  // bullet's entry, or the whole resume) says: no number, no skill and no
+  // name (a capitalized word past a sentence's start: an employer, product or
+  // tool the lexicon doesn't know) that isn't in the source, apart from
+  // skills the user confirmed.
   J.checkRewrite = (rewrite, source, { confirmed = [], keywords = [] } = {}) => {
     const numbers = new Set(numbersIn(source));
     const number = numbersIn(rewrite).find((n) => !numbers.has(n));
     if (number) return `adds the number ${number}`;
     const ok = (term) => J.mentions(source, term) || confirmed.some((c) => c === term || J.mentions(c, term));
     const skill = [...J.termsIn(rewrite), ...keywords.filter((k) => !k.soft).map((k) => k.term)].find((t) => J.mentions(rewrite, t) && !ok(t));
-    return skill ? `adds ${skill}` : '';
+    if (skill) return `adds ${skill}`;
+    // Skills the source has may be written another way ("JS" as "JavaScript").
+    let rest = rewrite;
+    for (const t of [...J.termsIn(source), ...confirmed]) for (const re of TERMS.get(t)?.res || []) rest = rest.replace(globalRe(re), ' ');
+    const known = new Set([...wordsOf(source), ...confirmed.flatMap(wordsOf)].map((w) => w.toLowerCase()));
+    const name = (rest.match(/(?<=[\p{L}\p{N},)]\s+)\p{Lu}[\p{L}\p{N}+#&'’-]*/gu) || []).find((w) => !known.has(w.toLowerCase()));
+    return name ? `adds ${name}` : '';
   };
+
+  // ---- The job's wording ----
+
+  // Some aliases are the same name written differently ("Postgres",
+  // "PostgreSQL"); others are related but different ("Unix", "Linux"), and
+  // writing one as the other would claim something new. The same name means
+  // only case, spaces, dots and hyphens differ, one is the other's initials
+  // ("AWS", "Amazon Web Services"), or one is a known nickname.
+  const NICKNAMES = new Set(['js', 'k8s', 'postgres', 'mongo', 'sklearn', 'dotnet', 'csharp', 'golang', 'rails', 'ror', 'mssql', 'sfdc', 'adwords', 'abtesting']);
+  const squash = (s) => s.toLowerCase().replace(/[\s.\-_/]+/g, '');
+  const initials = (s) => s.split(/[\s-]+/).map((w) => w[0] || '').join('').toLowerCase();
+  const acronymOf = (short, long) =>
+    /^[A-Z0-9]{2,6}s?$/.test(short) && /[\s-]/.test(long) && [squash(short), squash(short).replace(/s$/, '')].includes(initials(long));
+  // Spellings that differ only in spaces, dots and hyphens ("Node.js",
+  // "NodeJS") aren't worth changing; a lower-case "python" is.
+  const punctuationOnly = (a, b) => squash(a) === squash(b) && a.toLowerCase() !== b.toLowerCase();
+  const sameName = (a, b) =>
+    squash(a) === squash(b) || NICKNAMES.has(squash(a)) || NICKNAMES.has(squash(b)) || acronymOf(a, b) || acronymOf(b, a);
+
+  // Every way the text writes a lexicon term.
+  const spellings = (text, term) => TERMS.get(term).res.flatMap((re) => [...String(text).matchAll(globalRe(re))].map((m) => m[0]));
+
+  // [{ term, from, to, count }]: skills the resume has but writes differently
+  // from the job ("JS" where the job says "JavaScript"), anywhere it's still
+  // written that way. Only the same name, so swapping in the job's wording
+  // adds nothing to the resume.
+  J.wordingSuggestions = (resumeText, jd, keywords) => {
+    const out = [];
+    for (const k of keywords) {
+      if (k.soft || !TERMS.has(k.term)) continue;
+      const theirs = spellings(jd, k.term);
+      if (!theirs.length) continue;
+      const counts = theirs.reduce((m, s) => m.set(s, (m.get(s) || 0) + 1), new Map());
+      const to = [...counts].sort((a, b) => b[1] - a[1])[0][0];
+      const mine = spellings(resumeText, k.term);
+      if (!mine.length || NICKNAMES.has(squash(to))) continue;
+      // A job writing "python" in lower case isn't a reason to change "Python".
+      const froms = [...new Set(mine)].filter((s) => s !== to && sameName(s, to) && !punctuationOnly(s, to) && (squash(s) !== squash(to) || to !== to.toLowerCase()));
+      for (const from of froms) out.push({ term: k.term, from, to, count: mine.filter((s) => s === from).length });
+    }
+    return out;
+  };
+
+  // The text with each `from` (as written, as a whole word) written as `to`.
+  J.swapWording = (text, from, to) => String(text).replace(new RegExp(`(?<![\\w+#.])${esc(from)}(?![\\w+#]|\\.\\w)`, 'g'), to);
 
   // ---- Tailoring ----
 

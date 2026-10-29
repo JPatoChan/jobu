@@ -68,6 +68,18 @@ button.chip:hover { border-color: var(--brand); color: var(--brand); }
 .sheet li.ai::marker { color: var(--brand); }
 .sheet .group .gl { font-weight: 700; }
 .sheet .summary.ai { box-shadow: inset 3px 0 0 var(--brand); padding-left: 6px; }
+.sheet .summary:empty::before { content: 'No summary yet. Pick one below or type your own.'; color: #9ca3af; }
+
+/* Claude's options under a bullet or the summary. Not part of the PDF. */
+.sheet .opts { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 8px; padding: 6px; border: 1px dashed #c7d2fe; border-radius: 8px; background: #f8f9ff; font: 12.5px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.sheet li .opts { margin-left: -18px; }
+.sheet .opt { display: flex; flex-direction: column; gap: 1px; text-align: left; padding: 5px 8px; border: 1px solid transparent; border-radius: 6px; background: none; color: #111827; cursor: pointer; }
+.sheet .opt:hover { background: #eef2ff; }
+.sheet .opt.on { border-color: #4f46e5; background: #eef2ff; }
+.sheet .opt .focus { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: #4f46e5; }
+.sheet .opt:first-child .focus { color: #6b7280; }
+.sheet .opt.on .focus::after { content: ' ✓'; }
+.wording li { margin: 4px 0; }
 
 @media (max-width: 860px) {
   .layout { grid-template-columns: 1fr; }

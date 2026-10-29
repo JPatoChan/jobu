@@ -1,12 +1,13 @@
 // Resume tailoring: reading a resume into sections, pulling keywords from a
 // job description, scoring, tailoring without inventing anything, the PDF it
-// produces, and the optional Claude rewrite request.
+// produces, suggestions in the job's wording, and the optional Claude
+// rewrite options request.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { loadPure } from './helpers.mjs';
 import { extractText } from '../extension/src/options/resume-text.mjs';
 import { resumePdf, winAnsi } from '../extension/src/tailor/resume-pdf.mjs';
-import { rewriteResume, MODEL } from '../extension/src/tailor/resume-ai.mjs';
+import { suggestRewrites, MODEL } from '../extension/src/tailor/resume-ai.mjs';
 
 const J = loadPure();
 
@@ -157,6 +158,34 @@ test('rejects rewrites that add numbers or skills the resume does not have', () 
   assert.equal(J.checkRewrite('Built Python APIs with Pulumi for 30 teams', source, { keywords: kw }), 'adds Pulumi');
 });
 
+test('rejects rewrites that add a name the resume does not have, but not another spelling of its skills', () => {
+  const source = 'Engineer\tJan 2021 – Present\nEngines Ltd\nBuilt JS dashboards on Postgres for 30 teams';
+  assert.equal(J.checkRewrite('Built JavaScript dashboards on PostgreSQL for 30 teams at Engines Ltd', source), '');
+  assert.equal(J.checkRewrite('Shipped dashboards. Built them in JS for 30 teams', source), '', 'a sentence may start with a capital');
+  assert.equal(J.checkRewrite('Built JS dashboards for 30 Fortune teams', source), 'adds Fortune');
+  assert.equal(J.checkRewrite('Built JS dashboards with Pulumi for 30 teams', source), 'adds Pulumi', 'a tool the lexicon does not know');
+  assert.equal(J.checkRewrite('Built JS dashboards in Python for 30 teams', source), 'adds Python');
+});
+
+test('suggests the job\'s wording only for the same skill under another name', () => {
+  const resume = 'Built JS dashboards on Postgres and K8s\nRan Unix servers\nUsed Node.js, python and amazon web services';
+  const jd = 'Requirements\nJavaScript and PostgreSQL\nKubernetes on Linux\nNodeJS\nAWS\nPython';
+  const kw = J.jobKeywords(jd);
+  const got = J.wordingSuggestions(resume, jd, kw).map(({ from, to, count }) => `${from}>${to}:${count}`).sort();
+  // Unix is not Linux, and Node.js / NodeJS is just punctuation: neither is suggested.
+  assert.deepEqual(got, ['JS>JavaScript:1', 'K8s>Kubernetes:1', 'Postgres>PostgreSQL:1', 'amazon web services>AWS:1', 'python>Python:1'].sort());
+  // A job writing a skill in lower case doesn't ask to change it.
+  assert.deepEqual(J.wordingSuggestions('Python', 'Requirements\npython', J.jobKeywords('Requirements\npython')), []);
+  // Only where the resume still writes it the other way.
+  assert.deepEqual(J.wordingSuggestions('JS, JS and JavaScript', 'JavaScript', J.jobKeywords('JavaScript')), [{ term: 'JavaScript', from: 'JS', to: 'JavaScript', count: 2 }]);
+  assert.deepEqual(J.wordingSuggestions('JavaScript', 'JavaScript', J.jobKeywords('JavaScript')), []);
+});
+
+test('swaps a spelling as a whole word only', () => {
+  assert.equal(J.swapWording('JS apps, Node.js and JSON in JS', 'JS', 'JavaScript'), 'JavaScript apps, Node.js and JSON in JavaScript');
+  assert.equal(J.swapWording('Postgres and PostgreSQL', 'Postgres', 'PostgreSQL'), 'PostgreSQL and PostgreSQL');
+});
+
 test('the tailored PDF has real text that reads back in order', async () => {
   const kw = J.jobKeywords(JD);
   const { structure } = J.tailorResume(J.resumeStructure(RESUME), kw, { facts: { title: 'Senior Engineer', years: '8' } });
@@ -222,13 +251,28 @@ const ASK = {
   bullets: [{ id: 'b1', entry: 'Senior Engineer', text: 'Built REST APIs in Python' }],
   job: { title: 'Backend Engineer', company: 'Globex', description: 'Requirements\nPython, REST' },
   keywords: ['Python', 'REST'],
-  confirmed: [],
 };
-const ANSWER = JSON.stringify({ summary: 'Backend engineer who builds Python REST APIs.', bullets: [{ id: 'b1', text: 'Designed and built Python REST APIs' }] });
+const ANSWER = JSON.stringify({
+  summary: [{ text: 'Backend engineer who builds Python REST APIs.', focus: 'backend APIs' }],
+  bullets: [
+    {
+      id: 'b1',
+      options: [
+        { text: 'Designed and built Python REST APIs', focus: 'API design' },
+        { text: 'Built REST APIs in Python', focus: 'Python' },
+        { text: ' ', focus: 'empty' },
+        { text: 'Delivered Python REST APIs', focus: 'delivery' },
+        { text: 'One too many', focus: 'extra' },
+      ],
+    },
+  ],
+});
 
-test('asks Claude through the SDK with structured output and server-side fallbacks', async () => {
-  const { result, requests } = await withFetch(() => sse([{ type: 'text', text: ANSWER }]), () => rewriteResume(ASK));
-  assert.deepEqual(result, { summary: 'Backend engineer who builds Python REST APIs.', bullets: { b1: 'Designed and built Python REST APIs' } });
+test('asks Claude for rewrite options through the SDK with structured output and server-side fallbacks', async () => {
+  const { result, requests } = await withFetch(() => sse([{ type: 'text', text: ANSWER }]), () => suggestRewrites(ASK));
+  assert.deepEqual(result.summary, [{ text: 'Backend engineer who builds Python REST APIs.', focus: 'backend APIs' }]);
+  // Blank options go, and there are at most three.
+  assert.deepEqual(result.bullets.b1.map((o) => o.focus), ['API design', 'Python', 'delivery']);
   const [req] = requests;
   assert.ok(req.url.startsWith('https://api.anthropic.com/v1/messages'), req.url);
   assert.equal(req.headers.get('authorization'), 'Bearer sk-ant-test-key');
@@ -238,24 +282,26 @@ test('asks Claude through the SDK with structured output and server-side fallbac
   assert.equal(b.model, 'claude-opus-5-5');
   assert.equal(b.fallbacks, 'default');
   assert.equal(b.stream, true);
-  assert.equal(b.max_tokens, 16000);
+  assert.equal(b.max_tokens, 32000);
   assert.deepEqual(b.thinking, { type: 'adaptive' });
   assert.equal(b.output_config.effort, 'medium');
   assert.equal(b.output_config.format.type, 'json_schema');
   assert.deepEqual(b.output_config.format.schema.required, ['summary', 'bullets']);
-  assert.match(b.system, /Never invent anything/);
+  assert.deepEqual(b.output_config.format.schema.properties.bullets.items.required, ['id', 'options']);
+  assert.match(b.system, /Never add anything that isn't in the resume/);
+  assert.match(b.system, /up to 3 different ways/);
   assert.match(b.messages[0].content, /<bullets>[\s\S]*"id": "b1"/);
 });
 
 test('uses only the answer after a fallback switch', async () => {
   const blocks = [{ type: 'text', text: '{"summ' }, { type: 'fallback', from: { model: MODEL }, to: { model: 'claude-opus-4-8' } }, { type: 'text', text: ANSWER }];
-  const { result } = await withFetch(() => sse(blocks), () => rewriteResume(ASK));
-  assert.equal(result.bullets.b1, 'Designed and built Python REST APIs');
+  const { result } = await withFetch(() => sse(blocks), () => suggestRewrites(ASK));
+  assert.equal(result.bullets.b1[0].text, 'Designed and built Python REST APIs');
 });
 
 test('explains refusals and a rejected API key', async () => {
   await assert.rejects(
-    withFetch(() => sse([], 'refusal'), () => rewriteResume(ASK)),
+    withFetch(() => sse([], 'refusal'), () => suggestRewrites(ASK)),
     { name: 'RewriteError', message: /declined/ },
   );
   const denied = () =>
@@ -263,5 +309,5 @@ test('explains refusals and a rejected API key', async () => {
       status: 401,
       headers: { 'content-type': 'application/json' },
     });
-  await assert.rejects(withFetch(denied, () => rewriteResume(ASK)), { name: 'RewriteError', message: /didn’t accept that API key/ });
+  await assert.rejects(withFetch(denied, () => suggestRewrites(ASK)), { name: 'RewriteError', message: /didn’t accept that API key/ });
 });

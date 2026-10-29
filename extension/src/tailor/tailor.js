@@ -1,8 +1,10 @@
 // The tailor page, opened beside a job tab from the Jobu panel or popup.
 // Scores the profile's resume against the job, lists the job's keywords and
-// tailors the resume (resume-model.js); Claude can also rewrite it
-// (resume-ai.mjs). The user edits the result in place, and it's saved as a
-// PDF that the panel attaches to the application.
+// tailors the resume (resume-model.js). It suggests writing skills the way
+// the job does, and Claude can suggest ways to word each bullet
+// (resume-ai.mjs); the user picks one or keeps their own. The user edits the
+// result in place, and it's saved as a PDF that the panel attaches to the
+// application.
 import { extractText } from '../options/resume-text.mjs';
 import { resumePdf } from './resume-pdf.mjs';
 
@@ -12,6 +14,7 @@ const tabId = Number(new URLSearchParams(location.search).get('tab')) || null;
 const KEEP = 10; // tailored resumes kept in storage
 const SUMMARY = Symbol('summary');
 const DROPPED = 'A few characters the PDF font can’t show were left out.';
+const YOURS = 'Your wording';
 
 const state = {
   job: {},
@@ -24,8 +27,11 @@ const state = {
   // it). Skill lists are edited whole, by section title and position.
   edits: new Map(),
   groupEdits: new Map(),
-  claude: new Map(), // key -> Claude's text, for undo
+  claude: new Map(), // key -> the Claude option the user picked, for undo
   beforeClaude: new Map(),
+  options: new Map(), // key -> { was, options: [{ text, focus }] }, from Claude
+  showOptions: true,
+  swapped: [], // "JS as JavaScript": wording the user took from the job
   tailored: null, // { structure, changes } before edits
 };
 let binds = new WeakMap(); // editable element -> { save }
@@ -62,9 +68,10 @@ function groupItems(title, i, g) {
 }
 
 // The tailored structure's sections, plus a summary if only Claude or the
-// user wrote one.
+// user wrote one, or Claude has options for one.
 function sectionsOf(s) {
-  const needSummary = state.edits.has(SUMMARY) && !s.sections.some((sec) => sec.kind === 'summary');
+  const wanted = state.edits.has(SUMMARY) || (state.showOptions && state.options.has(SUMMARY));
+  const needSummary = wanted && !s.sections.some((sec) => sec.kind === 'summary');
   return needSummary ? [{ title: 'Summary', kind: 'summary', text: '' }, ...s.sections] : s.sections;
 }
 
@@ -73,15 +80,20 @@ function current() {
   return {
     name: edit(s.name),
     contact: s.contact.map(edit).filter(Boolean),
-    sections: sectionsOf(s).map((sec) => ({
-      title: edit(sec.title),
-      kind: sec.kind,
-      ...(sec.text != null && { text: state.edits.get(SUMMARY) ?? edit(sec.text) }),
-      ...(sec.groups && { groups: sec.groups.map((g, i) => ({ label: edit(g.label), items: groupItems(sec.title, i, g) })) }),
-      ...(sec.entries && { entries: sec.entries.map((e) => ({ head: e.head.map(edit).filter(Boolean), bullets: e.bullets.map(edit).filter(Boolean) })) }),
-    })),
+    sections: sectionsOf(s)
+      .map((sec) => ({
+        title: edit(sec.title),
+        kind: sec.kind,
+        ...(sec.text != null && { text: state.edits.get(SUMMARY) ?? edit(sec.text) }),
+        ...(sec.groups && { groups: sec.groups.map((g, i) => ({ label: edit(g.label), items: groupItems(sec.title, i, g) })) }),
+        ...(sec.entries && { entries: sec.entries.map((e) => ({ head: e.head.map(edit).filter(Boolean), bullets: e.bullets.map(edit).filter(Boolean) })) }),
+      }))
+      .filter((sec) => sec.text !== ''),
   };
 }
+
+// The summary as tailoring left it, before anyone's edits.
+const tailoredSummary = () => state.tailored.structure.sections.find((sec) => sec.kind === 'summary')?.text ?? '';
 
 // ---- Rendering ----
 
@@ -99,6 +111,33 @@ function field(tag, key, { cls = '', text = edit(key), save } = {}) {
   e.textContent = text;
   binds.set(e, { save: () => (save ? save(e) : state.edits.set(key, tidy(e.textContent))) });
   return e;
+}
+
+// Claude's options for one part of the resume, shown under it: the user's
+// own wording first, then each option, with the one in use marked.
+function optionsBox(key, now) {
+  const o = state.options.get(key);
+  if (!o || !state.showOptions) return '';
+  const box = el('div', 'opts');
+  const row = (text, focus, fromClaude) => {
+    const b = el('button', `opt${tidy(text) === tidy(now) ? ' on' : ''}`);
+    b.type = 'button';
+    b.append(el('span', 'focus', focus), el('span', 'text', text || 'No summary'));
+    b.onclick = () => pick(key, text, fromClaude);
+    return b;
+  };
+  box.append(row(o.was, YOURS, false), ...o.options.map((x) => row(x.text, x.focus, true)));
+  return box;
+}
+
+function pick(key, text, fromClaude) {
+  const original = key === SUMMARY ? tailoredSummary() : key;
+  if (text === original) state.edits.delete(key);
+  else state.edits.set(key, text);
+  if (fromClaude) state.claude.set(key, text);
+  else state.claude.delete(key);
+  renderSheet();
+  renderSide();
 }
 
 function renderSheet() {
@@ -119,7 +158,10 @@ function renderSheet() {
     box.append(field('h2', sec.title));
     if (sec.text != null) {
       const text = state.edits.get(SUMMARY) ?? edit(sec.text);
-      box.append(field('p', SUMMARY, { cls: `summary${state.claude.has(SUMMARY) ? ' ai' : ''}`, text, save: (e) => state.edits.set(SUMMARY, tidy(e.textContent)) }));
+      box.append(
+        field('p', SUMMARY, { cls: `summary${state.claude.has(SUMMARY) ? ' ai' : ''}`, text, save: (e) => state.edits.set(SUMMARY, tidy(e.textContent)) }),
+        optionsBox(SUMMARY, text),
+      );
     }
     (sec.groups || []).forEach((g, i) => {
       const row = el('div', 'group');
@@ -150,7 +192,7 @@ function renderSheet() {
         const ul = el('ul');
         for (const b of bullets) {
           const li = el('li', state.claude.has(b) ? 'ai' : '');
-          li.append(field('span', b), Object.assign(el('button', 'x', '×'), { title: 'Remove this bullet', type: 'button' }));
+          li.append(field('span', b), Object.assign(el('button', 'x', '×'), { title: 'Remove this bullet', type: 'button' }), optionsBox(b, edit(b)));
           li.dataset.key = b;
           ul.append(li);
         }
@@ -196,15 +238,53 @@ function renderSide() {
   $('chips-soft-wrap').hidden = !soft.length;
   $('chips-soft').replaceChildren(...soft.map((k) => chip(k, J.mentions(text, k.term) ? 'have' : 'soft')));
 
+  const wording = J.wordingSuggestions(text, state.job.description || '', state.keywords);
+  $('wording-card').hidden = !wording.length;
+  $('wording').replaceChildren(
+    ...wording.map((w) => {
+      const li = el('li');
+      const use = Object.assign(el('button', 'link-btn', 'Use'), { type: 'button', title: `Write ${w.from} as ${w.to} everywhere on your resume` });
+      use.onclick = () => useWording([w]);
+      li.append(el('span', '', `${w.from} → `), el('b', '', w.to), el('span', 'muted', ` · ${w.count} place${w.count === 1 ? '' : 's'} `), use);
+      return li;
+    }),
+  );
+  $('wording-all').hidden = wording.length < 2;
+  $('wording-all').onclick = () => useWording(wording);
+
   const mine = [...state.edits.keys()].filter((k) => state.edits.get(k) !== state.claude.get(k)).length + state.groupEdits.size;
   const changes = [...state.tailored.changes];
-  if (state.claude.size) changes.push(`Claude rewrote ${state.claude.size} part${state.claude.size === 1 ? '' : 's'} (marked in blue).`);
+  if (state.swapped.length) changes.push(`Wrote ${listOf(state.swapped)}, as the job does.`);
+  if (state.claude.size) changes.push(`You used ${state.claude.size} of Claude’s options (marked in blue).`);
   if (mine) changes.push(`You edited ${mine} part${mine === 1 ? '' : 's'}.`);
   $('changes').replaceChildren(
     ...(changes.length ? changes.map((c) => el('li', '', c)) : [el('li', 'none', 'Your resume already leads with what this job asks for.')]),
   );
   $('reset').hidden = !mine;
   $('ai-undo').hidden = !state.claude.size;
+  $('ai-first').hidden = $('ai-toggle').hidden = !state.options.size;
+  $('ai-toggle').textContent = state.showOptions ? 'Hide the options' : `Show the options (${state.options.size})`;
+}
+
+const listOf = (xs) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}`);
+
+// Writes skills the way the job does, everywhere on the resume, as the
+// user's own edit. Only the same name is ever swapped (J.wordingSuggestions).
+function useWording(swaps) {
+  const s = state.tailored.structure;
+  const swap = (now) => swaps.reduce((t, w) => J.swapWording(t, w.from, w.to), now);
+  const set = (key, now) => swap(now) !== now && state.edits.set(key, swap(now));
+  for (const sec of sectionsOf(s)) {
+    if (sec.text != null) set(SUMMARY, state.edits.get(SUMMARY) ?? edit(sec.text));
+    (sec.groups || []).forEach((g, i) => {
+      const now = groupItems(sec.title, i, g).join(', ');
+      if (swap(now) !== now) state.groupEdits.set(`${sec.title}|${i}`, { text: swap(now), had: [...g.items] });
+    });
+    for (const e of sec.entries || []) for (const k of [...e.head, ...e.bullets]) if (edit(k)) set(k, edit(k));
+  }
+  state.swapped.push(...swaps.map((w) => `${w.from} as ${w.to}`));
+  renderSheet();
+  renderSide();
 }
 
 function renderJob() {
@@ -373,6 +453,7 @@ document.querySelector('.side').addEventListener('click', (e) => {
 $('reset').onclick = () => {
   for (const k of [...state.edits.keys()]) if (state.edits.get(k) !== state.claude.get(k)) state.edits.delete(k);
   state.groupEdits.clear();
+  state.swapped = [];
   retailor();
 };
 
@@ -392,11 +473,12 @@ $('open-profile').onclick = () => chrome.runtime.openOptionsPage();
 
 // ---- Claude ----
 
-// Sends the resume (without name and contact details) and the job to Claude,
-// then keeps each rewrite only if J.checkRewrite finds nothing new in it.
-async function rewrite(apiKey) {
+// Sends the resume (without name, contact details and skills the user added)
+// and the job to Claude, and keeps each option only if J.checkRewrite finds
+// nothing in it that the resume doesn't say.
+async function suggest(apiKey) {
   const s = current();
-  const { rewriteResume } = await import('./resume-ai.mjs');
+  const { suggestRewrites } = await import('./resume-ai.mjs');
   const bullets = [];
   for (const sec of state.tailored.structure.sections) {
     for (const e of sec.entries || []) {
@@ -406,60 +488,58 @@ async function rewrite(apiKey) {
     }
   }
   const summary = s.sections.find((sec) => sec.kind === 'summary')?.text || '';
-  const resumeText = J.structureText({ ...s, name: '', contact: [] });
-  const confirmed = [...state.added];
-  const out = await rewriteResume({
+  const own = (sec) => (sec.groups ? { ...sec, groups: sec.groups.map((g) => ({ ...g, items: g.items.filter((x) => !state.added.has(x)) })) } : sec);
+  const resumeText = J.structureText({ name: '', contact: [], sections: s.sections.map(own) });
+  const out = await suggestRewrites({
     apiKey,
     resumeText,
     summary,
     bullets: bullets.map(({ id, entry, text }) => ({ id, entry, text })),
     job: state.job,
     keywords: state.keywords.map((k) => k.term),
-    confirmed,
   });
 
-  state.beforeClaude = new Map(state.edits);
+  if (!state.claude.size) state.beforeClaude = new Map(state.edits);
+  state.options.clear();
+  state.showOptions = true;
   const dropped = [];
-  const check = (text, source) => J.checkRewrite(text, source, { confirmed, keywords: state.keywords });
-  for (const b of bullets) {
-    const text = tidy(out.bullets[b.id] || '');
-    if (!text || text === b.text) continue;
-    const why = check(text, b.source);
-    if (why) dropped.push(why);
-    else {
-      state.edits.set(b.key, text);
-      state.claude.set(b.key, text);
+  const keep = (key, was, options, source) => {
+    const seen = new Set([tidy(was).toLowerCase()]);
+    const good = [];
+    for (const o of options) {
+      const text = tidy(o.text);
+      if (!text || seen.has(text.toLowerCase())) continue;
+      seen.add(text.toLowerCase());
+      const why = J.checkRewrite(text, source, { keywords: state.keywords });
+      if (why) dropped.push(why);
+      else good.push({ text, focus: tidy(o.focus) || 'Option' });
     }
-  }
+    if (good.length) state.options.set(key, { was, options: good });
+  };
+  for (const b of bullets) keep(b.key, b.text, out.bullets[b.id] || [], b.source);
   const facts = state.facts.years ? `${state.facts.years} years ${state.facts.title || ''}` : '';
-  const newSummary = tidy(out.summary || '');
-  if (newSummary && newSummary !== summary) {
-    const why = check(newSummary, `${resumeText}\n${facts}`);
-    if (why) dropped.push(`summary ${why}`);
-    else {
-      state.edits.set(SUMMARY, newSummary);
-      state.claude.set(SUMMARY, newSummary);
-    }
-  }
-  retailor();
-  const n = state.claude.size;
+  keep(SUMMARY, summary, out.summary, `${resumeText}\n${facts}`);
+
+  renderSheet();
+  renderSide();
+  const n = state.options.size;
   say(
     'ai-msg',
-    `${n ? `Claude rewrote ${n} part${n === 1 ? '' : 's'} of your resume, marked in blue. Read them over before you save.` : 'Claude didn’t change anything.'}` +
-      (dropped.length ? ` Jobu kept your original in ${dropped.length} place${dropped.length === 1 ? '' : 's'} where the rewrite ${[...new Set(dropped)].slice(0, 3).join('; ')}.` : ''),
+    `${n ? `Claude suggested new wording for ${n} part${n === 1 ? '' : 's'} of your resume. Pick one under each, or keep yours.` : 'Claude had no new wording to suggest.'}` +
+      (dropped.length ? ` Jobu hid ${dropped.length} option${dropped.length === 1 ? '' : 's'} where Claude ${[...new Set(dropped)].slice(0, 3).join('; ')}, which your resume doesn’t say.` : ''),
     'ok',
   );
 }
 
 async function runClaude(button, apiKey) {
   button.disabled = true;
-  say('ai-msg', 'Claude is rewriting your resume. This can take a minute…');
+  say('ai-msg', 'Claude is reading your resume and the job. This can take a minute…');
   try {
-    await rewrite(apiKey);
+    await suggest(apiKey);
     return true;
   } catch (err) {
     console.warn('Jobu: rewrite failed', err);
-    say('ai-msg', err.name === 'RewriteError' ? err.message : 'The rewrite didn’t work. Your resume is unchanged; try again.', 'warn');
+    say('ai-msg', err.name === 'RewriteError' ? err.message : 'Claude couldn’t suggest anything this time. Your resume is unchanged; try again.', 'warn');
     return false;
   } finally {
     button.disabled = false;
@@ -497,6 +577,21 @@ $('ai-undo').onclick = () => {
   state.claude.clear();
   retailor();
   say('ai-msg', 'Put back your resume as it was before Claude.');
+};
+
+$('ai-first').onclick = () => {
+  for (const [key, o] of state.options) {
+    state.edits.set(key, o.options[0].text);
+    state.claude.set(key, o.options[0].text);
+  }
+  renderSheet();
+  renderSide();
+};
+
+$('ai-toggle').onclick = () => {
+  state.showOptions = !state.showOptions;
+  renderSheet();
+  renderSide();
 };
 
 load().catch((err) => {

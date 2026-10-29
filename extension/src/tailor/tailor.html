@@ -57,19 +57,30 @@
           <button id="reset" class="link-btn" hidden>Undo my edits</button>
         </section>
 
+        <section id="wording-card" class="card" hidden>
+          <h2>Use the job’s wording</h2>
+          <p class="muted small">Your resume names these skills differently from the job. It’s the same skill, so this changes only the words.</p>
+          <ul id="wording" class="changes wording"></ul>
+          <button id="wording-all" class="link-btn" hidden>Use all of them</button>
+        </section>
+
         <section class="card ai">
-          <h2>Rewrite with Claude <span class="pill">optional</span></h2>
-          <p class="muted small">Claude rewrites your summary and bullets in the job’s words. It only rephrases what’s on your resume, and Jobu keeps your original wherever a rewrite adds a number or skill you don’t have. This sends your resume and the job description to Anthropic, using your own API key.</p>
+          <h2>Rewrite options from Claude <span class="pill">optional</span></h2>
+          <p class="muted small">Claude suggests up to three ways to word your summary and each bullet for this job, using the job’s language for what’s already on your resume. Pick one under each part, or keep yours. Jobu hides any option that adds a number, skill or name your resume doesn’t have. This sends your resume and the job description to Anthropic, using your own API key.</p>
           <form id="ai-key" class="ai-key" hidden>
             <label class="field"><span class="label">Anthropic API key</span><input id="key" type="password" autocomplete="off" placeholder="sk-ant-…" required></label>
             <label class="check small"><input id="remember" type="checkbox" checked> Remember it on this computer</label>
-            <button class="btn primary">Rewrite with Claude</button>
+            <button class="btn primary">Get rewrite options</button>
           </form>
           <div id="ai-ready" class="ai-ready" hidden>
-            <button id="ai-run" class="btn primary">Rewrite with Claude</button>
+            <button id="ai-run" class="btn primary">Get rewrite options</button>
             <button id="ai-forget" class="link-btn">Forget my API key</button>
           </div>
-          <button id="ai-undo" class="link-btn" hidden>Undo Claude’s changes</button>
+          <div class="ai-ready">
+            <button id="ai-first" class="link-btn" hidden>Use Claude’s first option everywhere</button>
+            <button id="ai-toggle" class="link-btn" hidden></button>
+            <button id="ai-undo" class="link-btn" hidden>Undo Claude’s changes</button>
+          </div>
           <p id="ai-msg" class="small" role="status"></p>
         </section>
 
