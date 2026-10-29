@@ -13,16 +13,14 @@
     .wrap { position: fixed; right: 20px; bottom: 20px; z-index: 2147483647; font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; color: #111827; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
     button { font: inherit; color: inherit; }
     .fab { display: flex; align-items: center; gap: 8px; border: 0; cursor: pointer; background: #4f46e5; color: #fff; padding: 10px 16px 10px 12px; border-radius: 999px; box-shadow: 0 6px 20px rgba(79,70,229,.35); font-weight: 600; font-size: 14px; }
-    .fab:hover { background: #4338ca; }
     .logo { width: 22px; height: 22px; flex: none; border-radius: 6px; background: #fff; color: #4f46e5; display: grid; place-items: center; font-weight: 800; }
     .panel .logo { background: #4f46e5; color: #fff; width: 28px; height: 28px; border-radius: 8px; }
-    .panel { width: 340px; max-height: calc(100vh - 100px); display: flex; flex-direction: column; background: #fff; border-radius: 16px; box-shadow: 0 16px 40px rgba(17,24,39,.22), 0 0 0 1px rgba(17,24,39,.06); overflow: hidden; }
+    .panel { width: 340px; max-height: calc(100vh - 100px); max-height: calc(100dvh - 100px); display: flex; flex-direction: column; background: #fff; border-radius: 16px; box-shadow: 0 16px 40px rgba(17,24,39,.22), 0 0 0 1px rgba(17,24,39,.06); overflow: hidden; }
     header { display: flex; align-items: center; gap: 10px; padding: 12px 10px 10px 14px; border-bottom: 1px solid #eef0f3; }
     .titles { flex: 1; min-width: 0; }
     .job { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .sub { color: #6b7280; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .icon { flex: none; border: 0; background: none; cursor: pointer; color: #6b7280; width: 28px; height: 28px; border-radius: 8px; font-size: 15px; }
-    .icon:hover { background: #f3f4f6; color: #111827; }
     .body { overflow-y: auto; padding: 12px 14px 14px; }
     .meter { font-size: 12px; color: #4b5563; margin-bottom: 6px; }
     .meter b { font-size: 18px; color: #111827; }
@@ -34,12 +32,9 @@
     .empty { margin: 0; color: #4b5563; }
     .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
     .btn { border: 1px solid #e5e7eb; background: #fff; padding: 8px 10px; border-radius: 10px; cursor: pointer; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .btn:hover:not(:disabled) { border-color: #4f46e5; color: #4f46e5; }
     .btn:disabled { opacity: .45; cursor: not-allowed; }
     .btn.primary { grid-column: 1 / -1; background: #4f46e5; border-color: #4f46e5; color: #fff; }
-    .btn.primary:hover:not(:disabled) { background: #4338ca; color: #fff; }
     .btn.dark { background: #111827; border-color: #111827; color: #fff; }
-    .btn.dark:hover:not(:disabled) { background: #1f2937; color: #fff; }
     .btn.wide { grid-column: 1 / -1; }
     .btn.ghost { background: #f5f5ff; border-color: #e0e7ff; color: #4338ca; }
     .resume-row { display: flex; gap: 8px; margin-top: 8px; }
@@ -68,7 +63,6 @@
     .g-row { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
     .g-row .go { flex: 1; }
     .btn.amber { background: #f59e0b; border-color: #f59e0b; color: #fff; }
-    .btn.amber:hover:not(:disabled) { background: #d97706; border-color: #d97706; color: #fff; }
     .field.current { background: #eef2ff; box-shadow: inset 3px 0 #4f46e5; }
     .account { margin-top: 12px; padding: 10px 12px; border: 1px solid #e0e7ff; background: #f5f5ff; border-radius: 12px; }
     .a-title { font-weight: 700; overflow-wrap: anywhere; }
@@ -78,15 +72,39 @@
     details { margin-top: 12px; }
     summary { cursor: pointer; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #6b7280; padding: 2px 0; }
     .field { display: grid; grid-template-columns: auto 1fr; align-items: baseline; width: 100%; text-align: left; border: 0; background: none; padding: 6px 8px; margin-top: 2px; border-radius: 8px; cursor: pointer; }
-    .field:hover { background: #f5f5ff; }
     .field .q, .field .v { grid-column: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .field .dot { grid-row: 1; }
     .field .v { color: #6b7280; font-size: 12px; }
     footer { display: flex; flex-wrap: wrap; gap: 2px; padding: 6px 8px; border-top: 1px solid #eef0f3; }
     .link { border: 0; background: none; color: #4f46e5; cursor: pointer; padding: 4px 6px; border-radius: 6px; font-size: 12px; }
-    .link:hover { background: #eef2ff; }
     .toast { background: #111827; color: #fff; padding: 10px 14px; border-radius: 10px; max-width: 300px; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
-    @media (max-width: 480px) { .wrap { left: 10px; right: 10px; bottom: 10px; } .panel { width: 100%; } }
+    /* Mouse hover only: on a touch screen it sticks to whatever was tapped. */
+    @media (hover: hover) {
+      .fab:hover { background: #4338ca; }
+      .icon:hover { background: #f3f4f6; color: #111827; }
+      .btn:hover:not(:disabled) { border-color: #4f46e5; color: #4f46e5; }
+      .btn.primary:hover:not(:disabled) { background: #4338ca; color: #fff; }
+      .btn.dark:hover:not(:disabled) { background: #1f2937; color: #fff; }
+      .btn.amber:hover:not(:disabled) { background: #d97706; border-color: #d97706; color: #fff; }
+      .field:hover { background: #f5f5ff; }
+      .link:hover { background: #eef2ff; }
+    }
+    /* Phones: a sheet along the bottom that leaves the top of the page in view
+       (dvh: the height between the browser's toolbars), with bigger targets.
+       While the user types in a field on the page it steps aside (.aside), and
+       the Jobu button brings it back. */
+    @media (max-width: 480px) {
+      .wrap { left: 8px; right: 8px; bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
+      .panel { width: 100%; max-height: 62vh; max-height: 62dvh; }
+      .wrap.open .fab, .wrap.aside .panel { display: none; }
+      .wrap.aside .fab { display: flex; }
+      .icon { width: 40px; height: 40px; font-size: 17px; }
+      .btn { padding: 11px 10px; }
+      .link { padding: 8px 8px; font-size: 13px; }
+      .field { padding: 9px 8px; }
+      .resume-row select { font-size: 16px; }
+      .toast { max-width: none; }
+    }
   `;
 
   const SKELETON = `
@@ -169,6 +187,7 @@
   let host;
   let shadow;
   let isOpen = false;
+  let aside = false; // phone: the open panel is out of the way while the user types
   let busy = null; // null | 'autofill' | 'next' | 'submit' | 'flow'
   let scan = null;
   // While stepping through empty fields: the field the guide is on, and its
@@ -201,7 +220,7 @@
     host.dataset.jobuUi = '';
     shadow = host.attachShadow({ mode: 'open' });
     shadow.innerHTML = `<style>${CSS}</style>${SKELETON}`;
-    $('.fab').onclick = () => setOpen(!isOpen);
+    $('.fab').onclick = () => (aside ? stepAside(false) : setOpen(!isOpen));
     $('.which').onchange = (e) => {
       chosenResume = e.target.value;
       e.target.title = e.target.selectedOptions[0]?.label || '';
@@ -210,15 +229,41 @@
       const act = e.target.closest('[data-act]')?.dataset.act;
       if (act) actions[act]();
     });
+    const typing = (e) => isOpen && PHONE.matches && typesIn(e.target) && stepAside(true);
+    document.addEventListener('focusin', typing, true);
+    // A tap on a field that kept focus (the Jobu button brought the panel
+    // back over it) fires no focusin.
+    document.addEventListener('pointerdown', typing, true);
+    // Back once focus leaves the page's fields, not when it moves between them
+    // or to the Jobu button (tapping it focuses it first on Android; its click
+    // brings the panel back).
+    document.addEventListener('focusout', () => {
+      if (aside) setTimeout(() => !typesIn(document.activeElement) && document.activeElement !== host && stepAside(false));
+    }, true);
     document.documentElement.append(host);
     return true;
+  }
+
+  // On a phone the open panel would cover the field being typed in, and the
+  // keyboard, so it steps aside while one has focus (CSS .aside). A field in
+  // a frame focuses the frame itself.
+  const PHONE = matchMedia('(max-width: 480px)');
+  const NO_TYPING = /^(button|checkbox|radio|file|submit|reset|image|range|color|hidden)$/;
+  const typesIn = (t) =>
+    !!t && t !== host && (t.tagName === 'TEXTAREA' || t.tagName === 'IFRAME' || t.isContentEditable || (t.tagName === 'INPUT' && !NO_TYPING.test(t.type)));
+
+  function stepAside(on) {
+    aside = on;
+    $('.wrap').classList.toggle('aside', on);
   }
 
   function setOpen(open) {
     if (!ensureHost()) return Promise.resolve();
     if (!open) endGuide();
     isOpen = open;
+    stepAside(false);
     $('.panel').hidden = !open;
+    $('.wrap').classList.toggle('open', open);
     return open ? refresh() : Promise.resolve();
   }
 

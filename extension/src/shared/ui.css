@@ -22,6 +22,7 @@
   }
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
 a { color: var(--brand); }
 button, input, select, textarea { font: inherit; color: inherit; }
@@ -38,3 +39,9 @@ input[type=text], input[type=email], input[type=tel], input[type=url], input[typ
 }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--brand); outline-offset: -1px; }
 .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; background: var(--brand-soft); color: var(--brand); font-weight: 600; }
+/* Touch screens: bigger buttons, and 16px text in fields so iOS doesn't zoom
+   in when one is focused. */
+@media (pointer: coarse) {
+  input, select, textarea { font-size: 16px; }
+  .btn { padding: 11px 16px; }
+}

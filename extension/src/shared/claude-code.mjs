@@ -30,9 +30,12 @@ async function send(message) {
 }
 
 // { connected: true, version } or { connected: false, reason, message }.
+// Only scripts/claude-host.sh answers with a status: Safari sends every
+// native message to Jobu's own app, whose handler just echoes it.
 export async function claudeCodeStatus() {
   try {
     const r = await send({ type: 'status' });
+    if (r?.type !== 'status') throw problem('not-connected', NOT_CONNECTED);
     return { connected: true, version: r.version || 'Claude Code' };
   } catch (err) {
     return { connected: false, reason: err.reason || 'failed', message: err.message };

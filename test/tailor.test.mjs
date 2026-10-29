@@ -275,6 +275,9 @@ test('Claude is off unless Claude Code is connected', async () => {
   assert.equal((await withHost(forbidden, () => claudeCodeStatus())).result.reason, 'other-extension');
   const moved = () => ({ type: 'error', error: 'no-claude', detail: '/usr/local/bin/claude' });
   assert.equal((await withHost(moved, () => claudeCodeStatus())).result.reason, 'no-claude');
+  // Safari hands native messages to Jobu's own app, which echoes them.
+  const echo = (message) => ({ echo: message });
+  assert.equal((await withHost(echo, () => claudeCodeStatus())).result.connected, false);
 });
 
 test('asks Claude for rewrite options through Claude Code', async () => {

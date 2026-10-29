@@ -109,7 +109,7 @@
       <p class="muted">Shortcuts: <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd> autofills the page, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd> goes to the next page, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>J</kbd> opens the Jobu panel, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd> goes to the next field Jobu left empty. Submit has no default key. Set one, or change the others, at chrome://extensions/shortcuts.</p>
     </section>
 
-    <section class="card" id="claude">
+    <section class="card" id="claude" hidden>
       <h2>Claude Code <span class="pill">optional</span></h2>
       <p class="muted">Jobu works without AI. If you use Claude Code on this computer, you can connect it to get rewrite options from Claude on the tailor page. Nothing else in Jobu uses Claude, and it stays off until you connect it.</p>
       <p class="claude-status" role="status">Checking for Claude Code…</p>
@@ -121,10 +121,11 @@
     </section>
 
     <section class="card">
-      <h2>Backup</h2>
+      <h2>Backup and your other devices</h2>
+      <p class="muted">To use Jobu on your phone or in another browser, export here and import the file there. It has your profile, saved answers, settings, resume, cover letter and tracked jobs. Saved passwords aren’t included.</p>
       <div class="actions">
         <button id="export" class="btn">Export profile</button>
-        <label class="btn">Import profile<input id="import" type="file" accept="application/json" hidden></label>
+        <label class="btn">Import profile<input id="import" type="file" accept="application/json,.json" hidden></label>
       </div>
     </section>
   </main>

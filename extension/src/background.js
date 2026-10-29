@@ -1,7 +1,10 @@
 // Service worker: coordinates autofill, page scans and step navigation across
 // all frames of a tab, keeps the job tracker, and wires up the context menu
-// and keyboard shortcuts.
-importScripts('shared/schema.js', 'shared/vault.js');
+// and keyboard shortcuts. Firefox runs it as a background script instead,
+// after the files manifest.json lists before it, so there's no importScripts.
+// Phones have no context menu or shortcuts for extensions (Firefox for
+// Android, Safari on iOS); those APIs are missing there.
+if (typeof importScripts === 'function') importScripts('shared/schema.js', 'shared/vault.js');
 const J = globalThis.JOBU;
 
 const CONTENT_FILES = [
@@ -31,10 +34,10 @@ const MENU = {
 };
 
 chrome.runtime.onInstalled.addListener(({ reason }) => {
-  chrome.contextMenus.removeAll(() => {
+  chrome.contextMenus?.removeAll(() => {
     for (const [id, title] of Object.entries(MENU)) chrome.contextMenus.create({ id, title, contexts: ['page', 'editable', 'frame'] });
   });
-  if (reason === 'install') chrome.runtime.openOptionsPage();
+  if (reason === 'install') J.openProfile();
   // Claude now runs through Claude Code (shared/claude-code.mjs), so an API
   // key saved by an earlier version isn't needed any more.
   if (reason === 'update') chrome.storage.local.remove('anthropicKey');
@@ -79,7 +82,7 @@ async function report(tabId, work) {
 async function autofillTab(tabId) {
   const { profile } = await J.store.load();
   if (!profile.firstName || !profile.email) {
-    chrome.runtime.openOptionsPage();
+    J.openProfile();
     return { action: 'autofill', needsProfile: true };
   }
   try {
@@ -428,16 +431,27 @@ async function saveJob(job) {
   return next;
 }
 
-// Opens the tailor page for the job in this tab, next to it.
+// Opens the tailor page for the job in this tab, next to it where the
+// browser can place tabs (not every phone browser can).
 async function openTailor(tabId) {
   const job = tabId ? await jobForTab(tabId, { full: true }) : null;
   await chrome.storage.session.set({ [`tailor:${tabId}`]: job });
   const tab = tabId ? await chrome.tabs.get(tabId).catch(() => null) : null;
-  await chrome.tabs.create({
-    url: chrome.runtime.getURL(`src/tailor/tailor.html?tab=${tabId || ''}`),
-    ...(tab && { index: tab.index + 1, openerTabId: tab.id }),
-  });
+  const url = chrome.runtime.getURL(`src/tailor/tailor.html?tab=${tabId || ''}`);
+  await chrome.tabs.create({ url, ...(tab && { index: tab.index + 1, openerTabId: tab.id }) }).catch(() => chrome.tabs.create({ url }));
   return { opened: true };
+}
+
+// Marks the toolbar button on a tab with an application form. Some phone
+// browsers have no badge, so anything that fails is skipped.
+function markTab(tabId, ats) {
+  for (const call of [
+    () => chrome.action.setBadgeBackgroundColor({ tabId, color: '#4f46e5' }),
+    () => chrome.action.setBadgeText({ tabId, text: 'J' }),
+    () => chrome.action.setTitle({ tabId, title: `Jobu — application form detected${ats ? ` (${ats})` : ''}` }),
+  ]) {
+    Promise.resolve().then(call).catch(() => {});
+  }
 }
 
 // Shared by the context menu and keyboard shortcuts.
@@ -488,16 +502,13 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     ACCOUNT_PASSWORD: () => accountPassword(tabId, msg.frameId, msg.op),
     GET_JOB: () => jobForTab(tabId),
     SAVE_JOB: () => saveJob(msg.job),
-    OPEN_OPTIONS: () =>
-      msg.section ? chrome.tabs.create({ url: chrome.runtime.getURL(`src/options/options.html#${msg.section}`) }) : chrome.runtime.openOptionsPage(),
+    OPEN_OPTIONS: () => J.openProfile(msg.section),
     APPLICATION_SUBMITTED: async () => {
       const job = await jobForTab(tabId);
       return job && saveJob({ ...job, status: 'applied' });
     },
     FORM_DETECTED: async () => {
-      chrome.action.setBadgeBackgroundColor({ tabId, color: '#4f46e5' });
-      chrome.action.setBadgeText({ tabId, text: 'J' });
-      chrome.action.setTitle({ tabId, title: `Jobu — application form detected${msg.ats ? ` (${msg.ats})` : ''}` });
+      markTab(tabId, msg.ats);
       if (msg.showButton) await chrome.tabs.sendMessage(tabId, { type: 'SHOW_BUTTON' }, { frameId: 0 }).catch(() => {});
     },
   };
@@ -510,13 +521,13 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
 });
 
 const MENU_ACTIONS = { 'jobu-autofill': 'autofill', 'jobu-next': 'next', 'jobu-submit': 'submit', 'jobu-save': 'save' };
-chrome.contextMenus.onClicked.addListener((info, tab) => {
+chrome.contextMenus?.onClicked.addListener((info, tab) => {
   const action = MENU_ACTIONS[info.menuItemId];
   if (action && tab?.id) ACTIONS[action](tab.id).catch(() => {});
 });
 
 const COMMAND_ACTIONS = { autofill: 'autofill', 'next-page': 'next', submit: 'submit', 'toggle-panel': 'panel', 'next-empty-field': 'guide' };
-chrome.commands.onCommand.addListener((command, tab) => {
+chrome.commands?.onCommand.addListener((command, tab) => {
   const action = COMMAND_ACTIONS[command];
   if (action && tab?.id) ACTIONS[action](tab.id).catch(() => {});
 });

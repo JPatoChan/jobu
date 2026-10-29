@@ -118,3 +118,19 @@ test('an update deletes the Anthropic API key earlier versions saved', () => {
   bg.installed({ reason: 'update' });
   assert.equal('anthropicKey' in page.store, false);
 });
+
+test('runs on phones, which have no context menu, shortcuts or toolbar badge', async () => {
+  const page = loadPage(html, { storage: { profile: WITH_ANSWER }, pageScripts: true, url });
+  const bg = loadBackground(page, { phone: true });
+  // Installing opens the profile page as a tab: there's no options page to open.
+  bg.installed({ reason: 'install' });
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(bg.created.map((t) => t.url), ['chrome-extension://jobu/src/options/options.html']);
+  // A form still gets the floating button, without a badge.
+  assert.equal(await bg.call({ type: 'FORM_DETECTED', ats: 'Workday', showButton: true }), undefined);
+  assert.deepEqual(bg.tabMessages.map((m) => m.type), ['SHOW_BUTTON']);
+  // The tailor page opens as a plain new tab.
+  assert.deepEqual(await bg.call({ type: 'TAILOR_RESUME' }), { opened: true });
+  assert.equal(bg.created.at(-1).url, 'chrome-extension://jobu/src/tailor/tailor.html?tab=1');
+  assert.equal((await bg.call({ type: 'AUTOFILL_TAB' })).filled > 0, true);
+});

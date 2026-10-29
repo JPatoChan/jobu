@@ -24,7 +24,8 @@ export function loadPure() {
 }
 
 // pageScripts: also run the fixture's own <script> tags (for multi-step demos).
-export function loadPage(html, { storage = {}, url = 'https://boards.greenhouse.io/acme/jobs/1', pageScripts = false } = {}) {
+// phone: media queries for a phone-width screen match.
+export function loadPage(html, { storage = {}, url = 'https://boards.greenhouse.io/acme/jobs/1', pageScripts = false, phone = false } = {}) {
   const dom = new JSDOM(html, { url, runScripts: pageScripts ? 'dangerously' : 'outside-only', pretendToBeVisual: true });
   const w = dom.window;
   // jsdom has no layout: treat every element as visible unless hidden or display:none.
@@ -43,6 +44,7 @@ export function loadPage(html, { storage = {}, url = 'https://boards.greenhouse.
     },
   });
   w.Element.prototype.scrollIntoView = () => {};
+  w.matchMedia = (media) => ({ media, matches: phone && /max-width/.test(media), addEventListener() {}, removeEventListener() {} });
   w.PointerEvent ??= w.MouseEvent;
   w.DragEvent ??= class extends w.MouseEvent {
     constructor(type, init = {}) {
@@ -87,12 +89,15 @@ export function loadPage(html, { storage = {}, url = 'https://boards.greenhouse.
 // loadPage(). chrome.scripting re-creates injected functions inside the page
 // from their source, as Chrome does, so `globalThis.JOBU` resolves there.
 // Results the service worker pushes to the page panel land in `reported`.
-export function loadBackground(page) {
+// phone: as on Firefox for Android or Safari on iOS, there's no context menu,
+// shortcut, toolbar badge or options page, and new tabs can't be placed.
+export function loadBackground(page, { phone = false } = {}) {
   const listeners = {};
   const event = (name) => ({ addListener: (fn) => (listeners[name] = fn) });
   const session = {};
   const reported = [];
   const created = []; // tabs the service worker opened
+  const tabMessages = []; // messages it sent to the page's tab
   page.J.reportResult = (r) => reported.push(r);
   page.J.showProgress = () => {};
   page.J.askSubmit = () => reported.push({ asked: true });
@@ -104,8 +109,12 @@ export function loadBackground(page) {
     action: { setBadgeBackgroundColor() {}, setBadgeText() {}, setTitle() {} },
     tabs: {
       get: async (id) => ({ id, status: 'complete', url: page.window.location.href }),
-      sendMessage: async () => {},
-      create: async (props) => (created.push(props), { id: 99, ...props }),
+      sendMessage: async (id, msg) => void tabMessages.push(msg),
+      create: async (props) => {
+        if (phone && ('index' in props || 'openerTabId' in props)) throw new Error('Property "index" is unsupported');
+        created.push(props);
+        return { id: 99, ...props };
+      },
       onRemoved: event('removed'),
     },
     storage: {
@@ -124,6 +133,10 @@ export function loadBackground(page) {
       },
     },
   };
+  if (phone) {
+    for (const api of ['contextMenus', 'commands', 'action']) delete chrome[api];
+    delete chrome.runtime.openOptionsPage;
+  }
   const ctx = vm.createContext({ chrome, console, setTimeout, clearTimeout, URL, crypto, TextEncoder, TextDecoder, btoa, atob, structuredClone });
   ctx.importScripts = (...files) => files.forEach((f) => vm.runInContext(readFileSync(new URL(f, root), 'utf8'), ctx));
   vm.runInContext(readFileSync(new URL('background.js', root), 'utf8'), ctx);
@@ -140,7 +153,7 @@ export function loadBackground(page) {
     });
   const run = (code) => vm.runInContext(code, ctx);
   const installed = (details) => listeners.installed(details);
-  return { call, nextReport, reported, session, created, run, installed };
+  return { call, nextReport, reported, session, created, tabMessages, run, installed };
 }
 
 export const PROFILE = {

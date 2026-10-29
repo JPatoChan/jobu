@@ -86,8 +86,17 @@ async function renderScan() {
   $('submit').title = nav.submit ? `Click “${nav.submit.label}”` : 'No submit button on this page yet';
 }
 
+// The page the popup is for. On a phone the popup can open as a tab of its
+// own; then it's for the web page the user was on last.
+async function pageTab() {
+  const own = await chrome.tabs.getCurrent().catch(() => null);
+  if (!own) return (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
+  const pages = (await chrome.tabs.query({})).filter((t) => t.id !== own.id && /^https?:/.test(t.url || ''));
+  return pages.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0))[0];
+}
+
 async function renderJob() {
-  [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  tab = await pageTab();
   if (!tab || !/^https?:/.test(tab.url || '')) {
     $('job-title').textContent = 'Open a job application to use Jobu';
     for (const id of PAGE_BUTTONS) $(id).disabled = true;
@@ -151,7 +160,7 @@ $('save').onclick = async () => {
   renderJobs();
 };
 
-$('settings').onclick = () => chrome.runtime.openOptionsPage();
+$('settings').onclick = () => J.openProfile();
 
 renderProfile();
 renderJobs();

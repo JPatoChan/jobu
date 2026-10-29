@@ -5,7 +5,11 @@
   "description": "Jobu: job application autofill and tracker Chrome extension",
   "scripts": {
     "test": "node --test \"test/*.test.mjs\"",
-    "vendor": "node scripts/vendor.mjs"
+    "vendor": "node scripts/vendor.mjs",
+    "firefox:lint": "npx --yes web-ext@10.7.0 lint --source-dir extension",
+    "firefox:build": "npx --yes web-ext@10.7.0 build --source-dir extension --artifacts-dir dist --overwrite-dest",
+    "firefox:android": "npx --yes web-ext@10.7.0 run --source-dir extension --target firefox-android",
+    "safari": "sh scripts/build-safari.sh"
   },
   "devDependencies": {
     "jsdom": "^24.1.3",

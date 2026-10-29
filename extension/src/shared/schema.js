@@ -140,6 +140,20 @@
   }
   J.deepMerge = deepMerge;
 
+  // Opens the profile page, at a section if given. Where the browser can't
+  // open the options page itself (some phone browsers), it opens as a tab.
+  // For the service worker and extension pages; content scripts ask the
+  // service worker (OPEN_OPTIONS).
+  J.openProfile = async (section = '') => {
+    const url = chrome.runtime.getURL(`src/options/options.html${section ? `#${section}` : ''}`);
+    if (!section) {
+      try {
+        return await chrome.runtime.openOptionsPage();
+      } catch {}
+    }
+    return chrome.tabs.create({ url });
+  };
+
   // Storage keys: profile, resume, coverLetterFile, settings, jobs, tailored
   // (resumes made on the tailor page), vault and vaultIndex (shared/vault.js).
   J.store = {

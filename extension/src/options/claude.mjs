@@ -1,6 +1,7 @@
 // The profile page's Claude Code card: whether Claude Code is connected, and
 // the command that connects it (scripts/connect-claude.sh with this copy of
-// Jobu's extension id). Jobu's AI features stay off until it is.
+// Jobu's extension id). Jobu's AI features stay off until it is. Phones can't
+// run Claude Code, so there the card stays hidden.
 import { claudeCodeStatus } from '../shared/claude-code.mjs';
 
 const card = document.getElementById('claude');
@@ -30,4 +31,10 @@ $('[data-claude="copy"]').onclick = async (e) => {
   e.target.textContent = copied ? 'Copied' : 'Couldn’t copy';
   setTimeout(() => (e.target.textContent = 'Copy'), 1500);
 };
-check();
+const { os } = await Promise.resolve()
+  .then(() => chrome.runtime.getPlatformInfo())
+  .catch(() => ({}));
+if (os !== 'android' && os !== 'ios') {
+  card.hidden = false;
+  check();
+}

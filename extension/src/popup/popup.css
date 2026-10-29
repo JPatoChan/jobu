@@ -26,3 +26,11 @@ header { display: flex; justify-content: space-between; align-items: center; mar
 .tracker select { width: auto; padding: 3px 6px; font-size: 12px; }
 .tracker .del { border: 0; background: none; color: var(--muted); cursor: pointer; }
 .tracker .del:hover { color: var(--danger); }
+/* Phones show the popup full width (Firefox for Android) or as a sheet
+   (Safari on iOS). */
+@media (pointer: coarse) {
+  body { width: auto; }
+  .tracker select { font-size: 16px; }
+  .tracker ul { max-height: none; }
+  .tracker .del { padding: 8px; }
+}

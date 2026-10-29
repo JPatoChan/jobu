@@ -1,6 +1,6 @@
 # Jobu
 
-Jobu is a Chrome extension (Manifest V3) that scans job applications, autofills them, steps through multi-page forms, submits them when you say so, and keeps track of the jobs you save and apply to.
+Jobu is a browser extension (Manifest V3) that scans job applications, autofills them, steps through multi-page forms, submits them when you say so, and keeps track of the jobs you save and apply to. It runs in Chrome and other Chromium browsers on your computer, in Safari on iPhone and iPad, and in Firefox on Android phones and tablets.
 
 ## Features
 
@@ -37,7 +37,8 @@ Jobu is a Chrome extension (Manifest V3) that scans job applications, autofills 
   - The profile page lists your saved passwords (show, copy, delete) and lets you add one you already have.
 - **Saved answers.** After you answer a company-specific question ("Why do you want to work here?"), use *Remember my answers* in the panel. The next form that asks a similar question gets filled automatically.
 - **Job tracker.** Save a job from the panel, the popup or the right-click menu. Track its status: saved, applied, interview, offer, or rejected. Job details come from the page's `JobPosting` structured data or from ATS-specific selectors. In multi-step flows (Workday, iCIMS), Jobu remembers the posting from the first page, so the right job is marked applied.
-- **Ways to trigger it:** the in-page panel, the toolbar popup, the right-click menu, or shortcuts: <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd> autofill, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd> next page, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>J</kbd> panel, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd> next empty field. *Submit* has no default key; you can assign one at `chrome://extensions/shortcuts`.
+- **Ways to trigger it:** the in-page panel, the toolbar popup, the right-click menu, or shortcuts: <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd> autofill, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd> next page, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>J</kbd> panel, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd> next empty field. *Submit* has no default key; you can assign one at `chrome://extensions/shortcuts`. Phones have no right-click menu or shortcuts, so there you use the Jobu button on the page and the extension's menu item.
+- **On a phone.** The panel opens as a sheet along the bottom of the screen and leaves the top of the form in view. It steps aside while you type in the form, so it doesn't cover the field or the keyboard. It comes back when you leave the field, or when you tap the Jobu button. *Show me* in the guide to empty fields works the same way: it moves the panel aside and puts you on the field.
 - **Private.** Your profile, resume, tailored resumes, encrypted passwords and tracker live in `chrome.storage.local`. Your resume is parsed and tailored in the extension. Nothing leaves your browser, with one exception you opt into: once you've connected Claude Code, *Get rewrite options* sends your resume and the job description to Claude through Claude Code, with your Claude Code sign-in. Your name and contact details are left out.
 
 ## Install (developer mode)
@@ -48,6 +49,38 @@ Jobu is a Chrome extension (Manifest V3) that scans job applications, autofills 
 4. Open any job application and click **Autofill**.
 
 To try it on the bundled sample forms, enable **Allow access to file URLs** for Jobu on `chrome://extensions`. Then open `test/fixtures/application.html` (single page) or `test/fixtures/multistep.html` (a three-step, Workday-style flow with validation and a confirmation page).
+
+## On your phone or tablet
+
+Chrome on Android and every browser on iPhone run extensions only through their own stores and formats. So Jobu runs in **Safari on iPhone and iPad** and in **Firefox on Android**, from the same `extension/` folder.
+
+**Move your setup over.** Each browser keeps its own copy of your Jobu data. On your computer, open Jobu's profile page and click *Export profile* under *Backup and your other devices*. Get `jobu-profile.json` onto your phone (AirDrop, email or a cloud drive), then use *Import profile* on the phone. The file has your profile, saved answers, settings, resume, cover letter and tracked jobs. Saved passwords stay on the computer. Or just upload your resume on the phone; Jobu fills in the profile from it as it does on a computer.
+
+### iPhone and iPad (Safari)
+
+Apple only runs Safari extensions that come inside an app, and only a Mac with Xcode can build one.
+
+1. On a Mac with Xcode, run `npm run safari` (or `sh scripts/build-safari.sh com.yourname.jobu` with your own bundle id). It writes an Xcode project to `safari/` with Apple's `safari-web-extension-converter`.
+2. Open the project in Xcode. Under *Signing & Capabilities*, choose your team for each target. A free Apple ID works for your own devices; Xcode asks you to sign in.
+3. Connect your iPhone or iPad, choose the *Jobu (iOS)* scheme and your device, and click Run. The Jobu app opens once; you can close it.
+4. On the phone, open Settings → Apps → Safari → Extensions → Jobu. Turn it on and set *All Websites* to *Allow*, or allow each job site when Safari asks.
+5. In Safari, the extensions button in the address bar opens Jobu's menu. Its ⚙ opens your profile, where you can import your profile or upload your resume.
+
+With a free Apple ID the app stops working after 7 days until you run it from Xcode again. To share Jobu, or keep it without rebuilding, publish it through TestFlight or the App Store with a paid Apple Developer account. Run `npm run safari` again after updating Jobu.
+
+### Android (Firefox)
+
+Firefox for Android installs extensions from [addons.mozilla.org](https://addons.mozilla.org) (AMO). Mozilla signs them there.
+
+- **To publish it**, run `npm run firefox:build`, which writes a zip to `dist/`, and upload the zip to AMO. Once it's listed, open its AMO page in Firefox on the phone and tap *Add to Firefox*.
+- **For your own phone only**, upload it to AMO as unlisted (*On your own*) and download the signed `.xpi`. Put the `.xpi` on the phone. In Firefox, open Settings → About Firefox and tap the Firefox logo five times to turn on the debug menu. Then go back to Settings, tap *Install extension from file* and pick the `.xpi`.
+- **To try changes**, turn on USB debugging on the phone and *Remote debugging via USB* in Firefox's settings, connect it, and run `npm run firefox:android -- --android-device <id>`. This needs `adb`; `adb devices` lists the id. Firefox opens on the phone with Jobu loaded, and reloads it when files change.
+
+Jobu's menu is in Firefox's menu → Extensions → Jobu, and its ⚙ opens your profile. Allow Jobu on all sites if Firefox asks.
+
+Chrome for Android doesn't run extensions. Some other Android browsers built on Chromium can install them, but Jobu isn't tested in them.
+
+**What's different on a phone.** Rewrite options from Claude need Claude Code on a computer, so the phone versions have no AI at all. There's no right-click menu or keyboard shortcuts. The rest is the same code as on a computer: scanning, autofill, the guide to empty fields, Next and Fill all pages, Submit, attaching and tailoring your resume, saved passwords and the tracker.
 
 ## Connect Claude Code (optional)
 
@@ -96,6 +129,7 @@ extension/
 scripts/vendor.mjs           copies pdf.js and pdf-lib
 scripts/connect-claude.sh    connects Claude Code: installs and registers the native messaging host (or --remove)
 scripts/claude-host.sh       the native messaging host: runs claude -p with no tools for the tailor page
+scripts/build-safari.sh      wraps extension/ in an Xcode project for Safari on iPhone, iPad and Mac (on a Mac)
 test/                        node:test + jsdom tests, sample forms, and a sandboxed service worker
 ```
 
@@ -117,6 +151,8 @@ npm test
 ```
 
 `extension/vendor` ships with the source, so the extension loads without a build step. After upgrading `pdfjs-dist` or `pdf-lib`, run `npm run vendor`.
+
+One `manifest.json` serves every browser. Chrome and Safari run `background.js` as a service worker. Firefox ignores `service_worker` and loads `background.scripts` instead: `schema.js` and `vault.js`, then `background.js`, which then skips `importScripts`. Phones lack some APIs (context menus, shortcuts, the toolbar badge, windows), so the code checks before using them. `test/flow.test.mjs` runs the service worker without them, and `test/guide.test.mjs` covers the panel stepping aside on a phone-width screen. `npm run firefox:lint` checks the extension with Mozilla's linter. The `firefox:*` scripts fetch Mozilla's `web-ext` tool with `npx`, so it isn't a dependency.
 
 To recognize a new skill or tool in job descriptions, add it to `LEXICON` in `src/tailor/resume-model.js`. Aliases go after a `|`, and a leading `=` makes an alias case-sensitive (for names that are also everyday words, like `=Rust`). Names that need more context, like Go, R or Spring, have their own patterns in `SPECIAL`.
 

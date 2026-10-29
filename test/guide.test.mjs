@@ -148,3 +148,62 @@ test('the panel steps through the empty fields in page order', async () => {
   await bg.run('ACTIONS.guide(1)');
   await until(() => d.activeElement === d.getElementById('state'));
 });
+
+test('on a phone the panel steps aside while you type in the form', async () => {
+  const page = loadPage(html, { storage: { profile: PROFILE }, phone: true });
+  const { document: d, J } = page;
+  const bg = loadBackground(page);
+  page.window.chrome.runtime = { sendMessage: (msg) => bg.call(msg) };
+  page.window.eval(readFileSync(new URL('../extension/src/content/ui.js', import.meta.url), 'utf8'));
+
+  await bg.call({ type: 'AUTOFILL_TAB' });
+  await J.openPanel();
+  const ui = d.querySelector('[data-jobu-ui]').shadowRoot;
+  const wrap = ui.querySelector('.wrap');
+  assert.deepEqual([...wrap.classList], ['wrap', 'open']);
+
+  // The guide focuses a text field: the panel gets out of the way.
+  ui.querySelector('[data-act="guideNext"]').click();
+  await until(() => d.activeElement === d.getElementById('fav'));
+  assert.ok(wrap.classList.contains('aside'));
+  // Moving to another field keeps it aside; leaving the fields brings it back.
+  d.getElementById('color').focus();
+  await new Promise((r) => setTimeout(r, 10));
+  assert.ok(wrap.classList.contains('aside'));
+  d.getElementById('color').blur();
+  await until(() => !wrap.classList.contains('aside'));
+  assert.equal(ui.querySelector('.guide').hidden, false, 'the guide is still there to go on');
+
+  // Ticking a box doesn't need the keyboard, so the panel stays.
+  d.getElementById('certify').focus();
+  await new Promise((r) => setTimeout(r, 10));
+  assert.ok(!wrap.classList.contains('aside'));
+
+  // The Jobu button brings it back while a field still has focus (iOS).
+  d.getElementById('fav').focus();
+  await until(() => wrap.classList.contains('aside'));
+  ui.querySelector('.fab').click();
+  assert.ok(!wrap.classList.contains('aside'));
+  assert.equal(ui.querySelector('.panel').hidden, false);
+  // Tapping the field again, which still has focus, steps aside again.
+  d.getElementById('fav').dispatchEvent(new page.window.PointerEvent('pointerdown', { bubbles: true }));
+  assert.ok(wrap.classList.contains('aside'));
+  // On Android the tap focuses the button before the click: still opens.
+  ui.querySelector('.fab').focus();
+  await new Promise((r) => setTimeout(r, 10));
+  ui.querySelector('.fab').click();
+  assert.ok(!wrap.classList.contains('aside'));
+  assert.equal(ui.querySelector('.panel').hidden, false);
+});
+
+test('on a wider screen the panel stays put while you type', async () => {
+  const page = loadPage(html, { storage: { profile: PROFILE } });
+  const { document: d, J } = page;
+  const bg = loadBackground(page);
+  page.window.chrome.runtime = { sendMessage: (msg) => bg.call(msg) };
+  page.window.eval(readFileSync(new URL('../extension/src/content/ui.js', import.meta.url), 'utf8'));
+  await J.openPanel();
+  d.getElementById('fav').focus();
+  await new Promise((r) => setTimeout(r, 10));
+  assert.ok(!d.querySelector('[data-jobu-ui]').shadowRoot.querySelector('.wrap').classList.contains('aside'));
+});

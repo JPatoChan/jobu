@@ -264,13 +264,21 @@ $('#add-answer').onclick = () => {
   $('#answers .answer:last-child input').focus();
 };
 
-$('#export').onclick = () => {
-  const blob = new Blob([JSON.stringify({ jobu: 1, profile: state.profile, settings: state.settings }, null, 2)], { type: 'application/json' });
+// One file that sets Jobu up on another device, such as a phone: profile,
+// saved answers, settings, resume, cover letter and tracked jobs. Saved
+// passwords stay where they are.
+$('#export').onclick = async () => {
+  const jobs = await J.store.jobs();
+  const data = { jobu: 2, profile: state.profile, settings: state.settings, resume: state.resume, coverLetterFile: state.coverLetterFile, jobs };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: 'jobu-profile.json' });
   a.click();
-  URL.revokeObjectURL(a.href);
+  // Phone browsers start the download after the click returns.
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
 };
 
+// Tracked jobs are added to the ones here; a job tracked on both keeps this
+// device's status.
 $('#import').onchange = async (e) => {
   const file = e.target.files[0];
   e.target.value = '';
@@ -280,9 +288,13 @@ $('#import').onchange = async (e) => {
     if (!data.profile) throw new Error('missing profile');
     state.profile = J.deepMerge(J.DEFAULT_PROFILE, data.profile);
     if (data.settings) state.settings = { ...J.DEFAULT_SETTINGS, ...data.settings };
-    await Promise.all([J.store.saveProfile(state.profile), J.store.saveSettings(state.settings)]);
+    const files = {};
+    for (const key of ['resume', 'coverLetterFile']) if (data[key]?.dataUrl) files[key] = state[key] = data[key];
+    const jobs = await J.store.jobs();
+    const added = (Array.isArray(data.jobs) ? data.jobs : []).filter((j) => j?.url && !jobs.some((x) => x.url === j.url));
+    await Promise.all([J.store.saveProfile(state.profile), J.store.saveSettings(state.settings), chrome.storage.local.set({ ...files, jobs: [...jobs, ...added] })]);
     render();
-    flashSaved('Imported');
+    flashSaved(`Imported${files.resume ? ' with your resume' : ''}${added.length ? `, ${added.length} tracked job${added.length === 1 ? '' : 's'}` : ''}`);
   } catch (err) {
     alert(`That file isn't a Jobu profile export (${err.message}).`);
   }

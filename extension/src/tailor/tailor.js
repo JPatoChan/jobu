@@ -406,7 +406,8 @@ $('attach').onclick = () =>
     if (r?.attached === false) return say('doc-msg', `${text} Download the PDF here to upload it yourself.`, 'warn');
     say('doc-msg', `${text}${dropped ? ` ${DROPPED}` : ''}`, tone || 'ok');
     const tab = await chrome.tabs.update(tabId, { active: true }).catch(() => null);
-    if (tab) chrome.windows.update(tab.windowId, { focused: true });
+    // Phones have tabs but no windows.
+    if (tab && chrome.windows) chrome.windows.update(tab.windowId, { focused: true });
   });
 
 // ---- Editing ----
@@ -459,7 +460,7 @@ $('jd-go').onclick = () => {
   analyze();
 };
 
-$('open-profile').onclick = () => chrome.runtime.openOptionsPage();
+$('open-profile').onclick = () => J.openProfile();
 
 // ---- Claude ----
 
